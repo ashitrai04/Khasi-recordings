@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin — Khasi Speech Collector</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Admin Dashboard</h1>
+            <p>Upload data, track progress, and export results</p>
+        </div>
+        <div class="stats" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value" id="statSentences">—</div>
+                <div class="stat-label">Sentences</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statRecordings">—</div>
+                <div class="stat-label">Recordings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statSpeakers">—</div>
+                <div class="stat-label">Speakers</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">📁 Upload Sentence Data</div>
+            <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px">Upload Excel (.xlsx) or CSV with columns:
+                <code>english_text</code>, <code>khasi_text</code></p>
+            <div class="drop-zone" id="dropZone">
+                <div class="icon">📂</div>
+                <p>Drag &amp; drop your file here, or click to browse</p><input type="file" id="fileInput"
+                    accept=".xlsx,.xls,.csv" style="display:none" />
+            </div>
+            <div class="upload-progress" id="uploadProgress" style="display:none">
+                <div class="label" id="uploadLabel">Uploading…</div>
+                <div class="bar">
+                    <div class="fill" id="uploadFill" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="status" id="uploadStatus"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">🔗 Shareable Contributor Link</div>
+            <p style="color:var(--muted);font-size:.88rem;margin-bottom:10px">Share this link with contributors:</p>
+            <div class="link-box"><code id="shareLink">—</code><button class="btn btn-sm btn-primary"
+                    id="copyLinkBtn">Copy</button></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📥 Export Enriched Dataset</div>
+            <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px">Download CSV with original sentences plus
+                recording metadata.</p>
+            <a class="btn btn-primary" href="/api/export">Download CSV</a>
+        </div>
+    </div>
+    <script src="/admin.js"></script>
+</body>
+
+</html>

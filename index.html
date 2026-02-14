@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Khasi Speech Collection</title>
+    <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎙️ Khasi Speech Collection</h1>
+            <p>Read the Khasi sentence aloud and submit your recording</p>
+        </div>
+        <div class="card" id="speakerSetup">
+            <div class="card-title">👤 Enter Your Name</div>
+            <div class="input-group">
+                <input class="input" id="speakerInput" placeholder="Your name or speaker ID…" />
+                <button class="btn btn-primary" id="speakerSaveBtn">Start</button>
+            </div>
+        </div>
+        <div id="mainArea" style="display:none">
+            <div class="progress-wrap" id="progressWrap" style="display:none">
+                <div class="progress-label"><span id="progressText">Your progress</span><span id="progressCount">0
+                        recorded</span></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+            <div class="sentence-card" id="sentenceCard">
+                <div class="khasi-text" id="khasiText">Loading…</div>
+                <div class="english-text" id="englishText"></div>
+            </div>
+            <div class="rec-indicator" id="recIndicator"><span class="rec-dot"></span><span>Recording… <span
+                        id="recTimer">0:00</span></span></div>
+            <div class="waveform-wrap" id="waveformWrap"><canvas id="waveformCanvas"></canvas></div>
+            <div class="controls">
+                <button class="btn btn-danger" id="recordBtn">⏺ Record</button>
+                <button class="btn btn-ghost" id="stopBtn" disabled>⏹ Stop</button>
+                <button class="btn btn-ghost" id="playBtn" disabled>▶ Play</button>
+                <button class="btn btn-success" id="submitBtn" disabled>✓ Submit</button>
+                <button class="btn btn-ghost" id="skipBtn">⏭ Skip</button>
+            </div>
+            <div class="status" id="status"></div>
+        </div>
+    </div>
+    <script src="/app.js"></script>
+</body>
+
+</html>
