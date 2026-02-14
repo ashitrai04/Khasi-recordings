@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { page = '1', limit = '50', speaker, recorded, sort = 'recorded_first' } = req.query;
+        const { page = '1', limit = '50', speaker, recorded, sort = 'id_asc' } = req.query;
         const p = Math.max(1, parseInt(page));
         const lim = Math.min(100, Math.max(1, parseInt(limit)));
         const from = (p - 1) * lim;
@@ -20,13 +20,13 @@ module.exports = async (req, res) => {
         // Base query
         let query = supabase.from('sentences').select('*', { count: 'exact' });
 
-        // Sort: recorded_first puts has_recording=true first, then by id
+        // Sort
         if (sort === 'recorded_first') {
             query = query.order('has_recording', { ascending: false }).order('id', { ascending: true });
-        } else if (sort === 'id_asc') {
-            query = query.order('id', { ascending: true });
         } else if (sort === 'id_desc') {
             query = query.order('id', { ascending: false });
+        } else {
+            query = query.order('id', { ascending: true });
         }
 
         // Filter: only recorded or only unrecorded
@@ -41,50 +41,79 @@ module.exports = async (req, res) => {
         const ids = (data || []).map(s => s.id);
         let recMap = {};
         if (ids.length > 0) {
-            let recQuery = supabase
-                .from('recordings')
-                .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, contributor_id')
-                .in('sentence_id', ids)
-                .order('created_at', { ascending: false });
-
-            // Filter by speaker name
-            if (speaker && speaker.trim()) {
-                recQuery = recQuery.ilike('speaker_id', '%' + speaker.trim() + '%');
-            }
-
-            const { data: recs } = await recQuery;
-
-            // Try to get contributor info (may fail if table doesn't exist)
-            let contribMap = {};
             try {
-                const contribIds = [...new Set((recs || []).map(r => r.contributor_id).filter(Boolean))];
-                if (contribIds.length > 0) {
-                    const { data: contribs } = await supabase
-                        .from('contributors')
-                        .select('id, name, gender, age, location')
-                        .in('id', contribIds);
-                    (contribs || []).forEach(c => { contribMap[c.id] = c });
-                }
-            } catch (e) { /* contributors table may not exist */ }
+                let recQuery = supabase
+                    .from('recordings')
+                    .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, contributor_id')
+                    .in('sentence_id', ids)
+                    .order('created_at', { ascending: false });
 
-            (recs || []).forEach(r => {
-                if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
-                const c = contribMap[r.contributor_id] || {};
-                recMap[r.sentence_id].push({
-                    rec_id: r.id,
-                    speaker_id: r.speaker_id,
-                    audio_path: r.audio_path,
-                    duration_seconds: r.duration_seconds,
-                    recorded_at: r.created_at,
-                    contributor_name: c.name || r.speaker_id,
-                    contributor_gender: c.gender || '',
-                    contributor_age: c.age || '',
-                    contributor_location: c.location || ''
-                });
-            });
+                // Filter by speaker name
+                if (speaker && speaker.trim()) {
+                    recQuery = recQuery.ilike('speaker_id', '%' + speaker.trim() + '%');
+                }
+
+                const { data: recs, error: recErr } = await recQuery;
+                if (recErr) {
+                    console.error('Recordings query error:', recErr.message);
+                    // Try without contributor_id column in case FK issue
+                    const { data: recs2, error: recErr2 } = await supabase
+                        .from('recordings')
+                        .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at')
+                        .in('sentence_id', ids)
+                        .order('created_at', { ascending: false });
+                    if (!recErr2 && recs2) {
+                        recs2.forEach(r => {
+                            if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
+                            recMap[r.sentence_id].push({
+                                rec_id: r.id,
+                                speaker_id: r.speaker_id,
+                                audio_path: r.audio_path,
+                                duration_seconds: r.duration_seconds,
+                                recorded_at: r.created_at,
+                                contributor_name: r.speaker_id,
+                                contributor_gender: '',
+                                contributor_age: '',
+                                contributor_location: ''
+                            });
+                        });
+                    }
+                } else if (recs && recs.length > 0) {
+                    // Try to get contributor info
+                    let contribMap = {};
+                    try {
+                        const contribIds = [...new Set(recs.map(r => r.contributor_id).filter(Boolean))];
+                        if (contribIds.length > 0) {
+                            const { data: contribs } = await supabase
+                                .from('contributors')
+                                .select('id, name, gender, age, location')
+                                .in('id', contribIds);
+                            (contribs || []).forEach(c => { contribMap[c.id] = c });
+                        }
+                    } catch (e) { /* contributors table may not exist */ }
+
+                    recs.forEach(r => {
+                        if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
+                        const c = contribMap[r.contributor_id] || {};
+                        recMap[r.sentence_id].push({
+                            rec_id: r.id,
+                            speaker_id: r.speaker_id,
+                            audio_path: r.audio_path,
+                            duration_seconds: r.duration_seconds,
+                            recorded_at: r.created_at,
+                            contributor_name: c.name || r.speaker_id,
+                            contributor_gender: c.gender || '',
+                            contributor_age: c.age || '',
+                            contributor_location: c.location || ''
+                        });
+                    });
+                }
+            } catch (e) {
+                console.error('Recordings fetch failed entirely:', e.message);
+            }
         }
 
-        // If filtering by speaker, only return sentences that have matching recordings
+        // Build rows
         let rows = (data || []).map(s => ({
             ...s,
             recordings: recMap[s.id] || []
