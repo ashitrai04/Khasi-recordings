@@ -6,25 +6,47 @@ module.exports = async (req, res) => {
 
     try {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename=khasi_speech_export.csv');
-        res.write('id,excel_row_id,english_text,khasi_text,audio_file_url,speaker_id,recorded_at,duration_seconds\n');
+        res.setHeader('Content-Disposition', 'attachment; filename=khasi_speech_dataset.csv');
+        res.write('sentence_id,excel_row_id,english_text,khasi_text,audio_file_url,speaker_id,contributor_name,gender,age,location,duration_seconds,recorded_at\n');
 
-        const PAGE = 1000;
+        const PAGE = 500;
         let offset = 0, hasMore = true;
         while (hasMore) {
             const { data, error } = await supabase
                 .from('sentences')
-                .select('id, excel_row_id, english_text, khasi_text, recordings(speaker_id, audio_path, duration_seconds, created_at)')
+                .select('id, excel_row_id, english_text, khasi_text')
                 .order('id').range(offset, offset + PAGE - 1);
             if (error) throw error;
 
             for (const s of data) {
-                let latest = null;
-                if (s.recordings && s.recordings.length > 0)
-                    latest = s.recordings.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b);
-                res.write([esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
-                esc(latest?.audio_path || ''), esc(latest?.speaker_id || ''), esc(latest?.created_at || ''), esc(latest?.duration_seconds || '')
-                ].join(',') + '\n');
+                // Fetch recordings for this sentence
+                const { data: recs } = await supabase
+                    .from('recordings')
+                    .select('speaker_id, audio_path, duration_seconds, created_at, contributors(name, gender, age, location)')
+                    .eq('sentence_id', s.id)
+                    .order('created_at', { ascending: false });
+
+                if (recs && recs.length > 0) {
+                    // Write one row per recording (for ML training — each audio is a data point)
+                    for (const r of recs) {
+                        res.write([
+                            esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
+                            esc(r.audio_path), esc(r.speaker_id),
+                            esc(r.contributors?.name || r.speaker_id),
+                            esc(r.contributors?.gender || ''),
+                            esc(r.contributors?.age || ''),
+                            esc(r.contributors?.location || ''),
+                            esc(r.duration_seconds || ''),
+                            esc(r.created_at || '')
+                        ].join(',') + '\n');
+                    }
+                } else {
+                    // Sentence with no recording yet
+                    res.write([
+                        esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
+                        '', '', '', '', '', '', '', ''
+                    ].join(',') + '\n');
+                }
             }
             hasMore = data.length === PAGE;
             offset += PAGE;

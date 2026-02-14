@@ -26,6 +26,7 @@
             <button class="btn btn-primary" id="loginBtn" style="width:100%">Login</button>
             <div class="status" id="loginStatus"></div>
         </div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 
     <!-- DASHBOARD -->
@@ -58,7 +59,7 @@
             <div class="dash-card" id="goData">
                 <div class="icon">📊</div>
                 <div class="label">View Data</div>
-                <div class="desc">Browse & edit all records</div>
+                <div class="desc">Browse sentences & recordings</div>
             </div>
         </div>
         <div class="card">
@@ -67,11 +68,12 @@
                     id="copyLinkBtn">Copy</button></div>
         </div>
         <div class="card">
-            <div class="card-title">📥 Export Dataset</div>
-            <p style="color:var(--muted);font-size:.84rem;margin-bottom:10px">Download CSV with sentences + recording
-                metadata</p>
+            <div class="card-title">📥 Export ML Dataset</div>
+            <p style="color:var(--muted);font-size:.84rem;margin-bottom:10px">Download CSV with sentences + audio URLs
+                for model training</p>
             <a class="btn btn-primary btn-sm" href="/api/export">Download CSV</a>
         </div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 
     <!-- UPLOAD SECTION -->
@@ -98,20 +100,18 @@
             </div>
             <div class="status" id="uploadStatus"></div>
         </div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 
-    <!-- DATA VIEWER -->
+    <!-- DATA VIEWER (Unified — sentences with recordings) -->
     <div id="dataView" class="container hidden">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
             <button class="btn btn-ghost btn-sm" id="backFromData">← Back</button>
-            <h2 style="font-size:1.1rem;font-weight:600">Data Viewer</h2>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="sentences">📝 Sentences</button>
-            <button class="tab-btn" data-tab="recordings">🎙️ Recordings</button>
+            <h2 style="font-size:1.1rem;font-weight:600">Sentences & Recordings</h2>
         </div>
         <div id="dataTableWrap" class="table-wrap"></div>
         <div class="pagination" id="dataPagination"></div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 
     <script src="/admin.js"></script>

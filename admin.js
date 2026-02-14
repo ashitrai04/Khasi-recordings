@@ -12,9 +12,8 @@
     const backFromUpload = el('backFromUpload'), backFromData = el('backFromData');
     const dataTableWrap = el('dataTableWrap'), dataPagination = el('dataPagination');
 
-    let currentTab = 'sentences', currentPage = 1;
+    let currentPage = 1;
 
-    /* ── Helpers ── */
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
     function showView(v) { [loginView, dashView, uploadView, dataView].forEach(x => hide(x)); show(v) }
@@ -33,13 +32,11 @@
         loginBtn.disabled = true; loginStatus.textContent = 'Logging in…'; loginStatus.className = 'status';
         try {
             const r = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'Login failed');
+            const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Login failed');
             sessionStorage.setItem('admin_user', d.username); adminName.textContent = d.username; showView(dashView); loadStats();
         } catch (e) { loginStatus.textContent = e.message; loginStatus.className = 'status error' }
         loginBtn.disabled = false;
     }
-
     logoutBtn.addEventListener('click', e => { e.preventDefault(); sessionStorage.removeItem('admin_user'); showView(loginView); loginUser.value = ''; loginPass.value = ''; loginStatus.textContent = '' });
 
     /* ── Dashboard ── */
@@ -90,57 +87,48 @@
         } catch (err) { uploadStatus.textContent = 'Error: ' + err.message; uploadStatus.className = 'status error' }
     }
 
-    /* ── Data Viewer ── */
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active'); currentTab = btn.dataset.tab; currentPage = 1; loadData();
-        });
-    });
-
+    /* ── Unified Data Viewer ── */
     async function loadData() {
         dataTableWrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
         dataPagination.innerHTML = '';
         try {
-            const r = await fetch(`/api/data?type=${currentTab}&page=${currentPage}&limit=50`);
+            const r = await fetch(`/api/data?page=${currentPage}&limit=50`);
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
-            if (currentTab === 'sentences') renderSentences(d); else renderRecordings(d);
-            renderPagination(d.total, d.page, d.limit);
+            renderData(d); renderPagination(d.total, d.page, d.limit);
         } catch (e) { dataTableWrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
     }
 
-    function renderSentences(d) {
-        let h = '<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>English</th><th>Khasi</th><th>Recorded</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+    function renderData(d) {
+        let h = '<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>English</th><th>Khasi</th><th>Recordings</th><th>Actions</th></tr></thead><tbody>';
         d.rows.forEach((r, i) => {
             const n = (d.page - 1) * d.limit + i + 1;
-            h += `<tr data-id="${r.id}"><td>${n}</td><td>${r.id}</td>
+            const recCount = r.recordings ? r.recordings.length : 0;
+            let recHtml = '<span class="rec-status pending">0 recordings</span>';
+            if (recCount > 0) {
+                recHtml = '<div style="font-size:.78rem">';
+                r.recordings.forEach((rec, ri) => {
+                    recHtml += `<div style="margin-bottom:4px;padding:4px 0;${ri > 0 ? 'border-top:1px solid var(--border)' : ''}">
+          <div><strong>${esc(rec.contributor_name)}</strong> ${rec.contributor_gender ? '· ' + esc(rec.contributor_gender) : ''} ${rec.contributor_age ? '· ' + rec.contributor_age + 'y' : ''} ${rec.contributor_location ? '· ' + esc(rec.contributor_location) : ''}</div>
+          <div style="color:var(--muted)">${rec.duration_seconds ? rec.duration_seconds.toFixed(1) + 's' : '—'} · ${fmtDate(rec.recorded_at)}</div>
+          ${rec.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + escAttr(rec.audio_path) + '\')">🔊 Play</span>' : ''}
+        </div>`;
+                });
+                recHtml += '</div>';
+            }
+            h += `<tr data-id="${r.id}">
+      <td>${n}</td><td>${r.id}</td>
       <td class="wrap editable" data-field="english_text" data-table="sentences">${esc(r.english_text)}</td>
       <td class="wrap editable" data-field="khasi_text" data-table="sentences">${esc(r.khasi_text)}</td>
-      <td>${r.has_recording ? '<span class="rec-status done">Yes</span>' : '<span class="rec-status pending">No</span>'}</td>
-      <td>${fmtDate(r.created_at)}</td>
-      <td><button class="btn-icon edit-row-btn" title="Edit">✏️</button></td></tr>`;
+      <td style="white-space:normal;min-width:200px">${recHtml}</td>
+      <td><button class="btn-icon edit-row-btn" title="Edit">✏️</button></td>
+    </tr>`;
         });
         h += '</tbody></table>'; dataTableWrap.innerHTML = h; attachEditing();
     }
 
-    function renderRecordings(d) {
-        let h = '<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>Speaker</th><th>Name</th><th>Gender</th><th>Age</th><th>Location</th><th>English</th><th>Khasi</th><th>Audio</th><th>Duration</th><th>Date</th></tr></thead><tbody>';
-        d.rows.forEach((r, i) => {
-            const n = (d.page - 1) * d.limit + i + 1;
-            h += `<tr data-id="${r.id}"><td>${n}</td><td>${r.id}</td>
-      <td>${esc(r.speaker_id)}</td>
-      <td>${esc(r.contributor_name)}</td><td>${esc(r.contributor_gender)}</td><td>${r.contributor_age || '—'}</td><td>${esc(r.contributor_location)}</td>
-      <td class="wrap">${esc(r.english_text)}</td><td class="wrap">${esc(r.khasi_text)}</td>
-      <td>${r.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + esc(r.audio_path) + '\')">🔊 Play</span>' : '—'}</td>
-      <td>${r.duration_seconds ? r.duration_seconds.toFixed(1) + 's' : '—'}</td>
-      <td>${fmtDate(r.created_at)}</td></tr>`;
-        });
-        h += '</tbody></table>'; dataTableWrap.innerHTML = h;
-    }
-
     function renderPagination(total, page, limit) {
-        const pages = Math.ceil(total / limit); if (pages <= 1) { dataPagination.innerHTML = `<span class="info">${total} record${total !== 1 ? 's' : ''}</span>`; return }
-        let h = `<span class="info">${total} records · Page ${page}/${pages}</span>`;
+        const pages = Math.ceil(total / limit); if (pages <= 1) { dataPagination.innerHTML = `<span class="info">${total} sentence${total !== 1 ? 's' : ''}</span>`; return }
+        let h = `<span class="info">${total} sentences · Page ${page}/${pages}</span>`;
         h += `<button class="page-btn" ${page <= 1 ? 'disabled' : ''}onclick="goPage(${page - 1})">‹ Prev</button>`;
         const start = Math.max(1, page - 2), end = Math.min(pages, page + 2);
         if (start > 1) h += '<button class="page-btn" onclick="goPage(1)">1</button>';
@@ -153,39 +141,35 @@
     }
     window.goPage = function (p) { currentPage = p; loadData() };
 
-    /* ── Inline editing ── */
+    /* ── Inline Editing ── */
     function attachEditing() {
         document.querySelectorAll('.edit-row-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const row = this.closest('tr'); const id = row.dataset.id;
                 const cells = row.querySelectorAll('.editable');
                 if (this.dataset.editing === 'true') {
-                    // Save
                     const updates = {};
                     cells.forEach(c => { const inp = c.querySelector('.edit-input'); if (inp) { updates[c.dataset.field] = inp.value; c.textContent = inp.value } });
                     this.textContent = '✏️'; this.dataset.editing = 'false';
-                    saveEdit(c => c.dataset.table, id, updates, cells);
+                    saveEdit(id, updates, cells[0]?.dataset.table || 'sentences');
                 } else {
-                    // Enter edit mode
-                    cells.forEach(c => { const v = c.textContent; c.innerHTML = `<input class="edit-input" value="${esc(v)}">` });
+                    cells.forEach(c => { const v = c.textContent; c.innerHTML = `<input class="edit-input" value="${escAttr(v)}">` });
                     this.textContent = '💾'; this.dataset.editing = 'true';
                 }
             });
         });
     }
 
-    async function saveEdit(tableFn, id, updates, cells) {
-        const table = cells[0]?.dataset.table || 'sentences';
+    async function saveEdit(id, updates, table) {
         try {
             const r = await fetch('/api/data', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ table, id: Number(id), updates }) });
             if (!r.ok) throw new Error('Save failed');
         } catch (e) { alert('Save failed: ' + e.message) }
     }
 
-    /* Audio playback */
     window.playAudio = function (url) { const a = new Audio(url); a.play() };
 
-    /* ── Utils ── */
-    function esc(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+    function esc(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+    function escAttr(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') }
     function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) }
 })();
