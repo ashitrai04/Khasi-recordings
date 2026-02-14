@@ -6,30 +6,26 @@ module.exports = async (req, res) => {
 
     try {
         const { speaker_id, limit = '30', offset = '0' } = req.query;
-        if (!speaker_id) return res.status(400).json({ error: 'speaker_id required' });
+        // speaker_id is still logged/tracked but not used for filtering anymore
+        // per user request: "once recorded should not be shown same sentences to the client"
 
         const lim = Math.min(50, Math.max(1, parseInt(limit)));
         const off = Math.max(0, parseInt(offset));
 
-        // Try RPC batch function first
-        const { data, error } = await supabase.rpc('get_batch_sentences', {
-            p_speaker: speaker_id, p_limit: lim, p_offset: off
-        });
+        // Fetch sentences that have NOT been recorded by ANYONE
+        const { data, error, count } = await supabase
+            .from('sentences')
+            .select('*', { count: 'exact' })
+            .eq('has_recording', false)
+            .order('id', { ascending: true })
+            .range(off, off + lim - 1);
 
-        if (error) {
-            console.warn('RPC failed, using fallback:', error.message);
-            return await fallbackBatch(res, speaker_id, lim, off);
-        }
-
-        // Get total unrecorded count for this speaker
-        const { count } = await supabase.rpc('get_batch_sentences', {
-            p_speaker: speaker_id, p_limit: 100000, p_offset: 0
-        }).then(r => ({ count: r.data?.length || 0 }));
+        if (error) throw error;
 
         if (!data || data.length === 0) {
             return res.json({ done: true, sentences: [], total: 0, message: 'All sentences recorded!' });
         }
-        res.json({ done: false, sentences: data, total: count, limit: lim, offset: off });
+        res.json({ done: false, sentences: data, total: count || 0, limit: lim, offset: off });
     } catch (err) {
         console.error('Next sentence error:', err);
         res.status(500).json({ error: err.message });
