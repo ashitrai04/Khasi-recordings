@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Admin - Upload</title>
+  <style>body{font-family:Arial;padding:20px;max-width:800px;margin:auto}</style>
+</head>
+<body>
+  <h1>Admin upload</h1>
+  <p>Upload CSV or XLSX with columns: id (optional), english_text, khasi_text</p>
+  <form id="uploadForm">
+    <input type="file" id="fileInput" name="file" />
+    <button>Upload (to local server)</button>
+    <button type="button" id="uploadToSupBtn" disabled>Upload to Supabase (via Vercel)</button>
+  </form>
+  <hr />
+  <h3>Supabase settings (for Vercel deployment)</h3>
+  <div>
+    <label>Supabase URL: <input id="supabaseUrl" style="width:80%" /></label><br/>
+    <label>Supabase ANON Key: <input id="supabaseAnon" style="width:80%" /></label><br/>
+    <button id="saveSupabase">Save Supabase keys (to localStorage)</button>
+    <div id="supStatus"></div>
+  </div>
+  <div id="res"></div>
+  <hr />
+  <a href="/admin/export">Download enriched CSV</a>
+  <hr />
+  <div>
+    <h3>Summary</h3>
+    <button id="refreshSummary">Refresh</button>
+    <pre id="summary">-</pre>
+  </div>
+  <script>
+    // Load saved supabase keys if present
+    const supUrlEl = document.getElementById('supabaseUrl');
+    const supAnonEl = document.getElementById('supabaseAnon');
+    const supStatus = document.getElementById('supStatus');
+    supUrlEl.value = localStorage.getItem('SUPABASE_URL') || '';
+    supAnonEl.value = localStorage.getItem('SUPABASE_ANON') || '';
+    document.getElementById('saveSupabase').addEventListener('click', ()=>{
+      localStorage.setItem('SUPABASE_URL', supUrlEl.value.trim());
+      localStorage.setItem('SUPABASE_ANON', supAnonEl.value.trim());
+      supStatus.innerText = 'Saved to localStorage. Deploy your frontend and keys will be used by contributors.';
+    });
+    document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const f = document.getElementById('fileInput').files[0];
+      if(!f) return alert('pick file');
+      const fd = new FormData(); fd.append('file', f);
+      const res = await fetch('/admin/upload', { method:'POST', body: fd });
+      const j = await res.json();
+      document.getElementById('res').innerText = JSON.stringify(j);
+    });
+
+    // Upload directly to Vercel serverless endpoint which will import into Supabase using service_role
+    document.getElementById('fileInput').addEventListener('change', ()=>{ document.getElementById('uploadToSupBtn').disabled = false; });
+    document.getElementById('uploadToSupBtn').addEventListener('click', async ()=>{
+      const f = document.getElementById('fileInput').files[0];
+      if(!f) return alert('pick file');
+      const reader = new FileReader();
+      reader.onload = async ()=>{
+        const arr = new Uint8Array(reader.result);
+        // convert to base64
+        let binary = '';
+        for (let i = 0; i < arr.byteLength; i++) binary += String.fromCharCode(arr[i]);
+        const b64 = btoa(binary);
+        document.getElementById('res').innerText = 'Uploading to Supabase via serverless...';
+        const r = await fetch('/api/supabase-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: f.name, data: b64 }) });
+        const j = await r.json(); document.getElementById('res').innerText = JSON.stringify(j, null, 2);
+      };
+      reader.readAsArrayBuffer(f);
+    });
+    document.getElementById('refreshSummary').addEventListener('click', async ()=>{
+      const r = await fetch('/admin/summary'); const j = await r.json(); document.getElementById('summary').innerText = JSON.stringify(j, null, 2);
+    });
+  </script>
+</body>
+</html>

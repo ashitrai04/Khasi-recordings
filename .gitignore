@@ -1,0 +1,15 @@
+# Node
+node_modules/
+
+# Environment
+.env.local
+
+# Database
+data.sqlite
+
+# Uploads and recordings
+uploads/
+recordings/
+
+# Logs
+npm-debug.log*

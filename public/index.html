@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Khasi Recording</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;padding:20px;max-width:800px;margin:auto}
+    .khasi{font-size:2rem;margin-bottom:10px}
+    .english{color:#666;margin-bottom:20px}
+    button{margin-right:8px}
+    #status{margin-top:12px;color:#333}
+  </style>
+</head>
+<body>
+  <h1>Khasi Speech Collection</h1>
+  <div>
+    <label>Speaker name: <input id="speaker" /></label>
+    <button id="saveSpeaker">Save</button>
+  </div>
+  <hr />
+  <div id="sentenceArea">
+    <div class="khasi" id="khasiText">Loading...</div>
+    <div class="english" id="englishText"></div>
+    <div>
+      <button id="recordBtn">Record</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="playBtn" disabled>Play</button>
+      <button id="submitBtn" disabled>Submit</button>
+      <button id="skipBtn">Skip</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <script src="/app.js"></script>
+  <!-- Supabase JS (CDN) - used when deploying with Supabase storage/backend -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+</body>
+</html>
