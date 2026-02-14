@@ -738,6 +738,24 @@ table.data-table {
     display: none !important
 }
 
+/* Bulk Action Bar */
+.bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(248, 113, 113, .08);
+    border: 1px solid rgba(248, 113, 113, .25);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px
+}
+
+.bulk-bar span {
+    font-size: .84rem;
+    color: var(--red);
+    font-weight: 600
+}
+
 /* Company Footer */
 .company-footer {
     text-align: center;

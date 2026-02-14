@@ -14,6 +14,7 @@
 
     let currentPage = 1;
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0;
+    let selectedIds = new Set();
 
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
@@ -92,6 +93,7 @@
     async function loadData() {
         dataTableWrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
         dataPagination.innerHTML = '';
+        selectedIds.clear(); updateBulkBar();
         try {
             const r = await fetch(`/api/data?page=${currentPage}&limit=50`);
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
@@ -100,7 +102,8 @@
     }
 
     function renderData(d) {
-        let h = '<table class="data-table"><thead><tr><th>ID</th><th>English</th><th>Khasi</th><th>Record</th><th>Recordings</th><th>Edit</th></tr></thead><tbody>';
+        let h = '<div class="bulk-bar hidden" id="bulkBar"><span id="bulkCount">0 selected</span><button class="btn btn-danger btn-sm" onclick="bulkDelete()">🗑 Delete Selected</button></div>';
+        h += '<table class="data-table"><thead><tr><th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" /></th><th>ID</th><th>English</th><th>Khasi</th><th>Record</th><th>Recordings</th><th>Actions</th></tr></thead><tbody>';
         d.rows.forEach((r) => {
             const recCount = r.recordings ? r.recordings.length : 0;
             let recHtml = '<span class="rec-status pending">0</span>';
@@ -121,6 +124,7 @@
                 recHtml += '</div>';
             }
             h += `<tr data-id="${r.id}">
+      <td><input type="checkbox" class="row-check" value="${r.id}" onchange="toggleRowCheck(${r.id},this.checked)" ${selectedIds.has(r.id) ? 'checked' : ''} /></td>
       <td>${r.id}</td>
       <td class="wrap editable" data-field="english_text" data-table="sentences">${esc(r.english_text)}</td>
       <td class="wrap editable" data-field="khasi_text" data-table="sentences">${esc(r.khasi_text)}</td>
@@ -130,7 +134,10 @@
         <button class="btn btn-xs btn-primary hidden" onclick="adminUpload(${r.id})" id="adminUpBtn-${r.id}">Upload</button>
       </div></td>
       <td style="white-space:normal;min-width:180px">${recHtml}</td>
-      <td><button class="btn-icon edit-row-btn" title="Edit">✏️</button></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn-icon edit-row-btn" title="Edit">✏️</button>
+        <button class="btn-icon" onclick="deleteSingle(${r.id})" title="Delete" style="color:var(--red)">🗑</button>
+      </div></td>
     </tr>`;
         });
         h += '</tbody></table>'; dataTableWrap.innerHTML = h; attachEditing();
@@ -150,6 +157,47 @@
         dataPagination.innerHTML = h;
     }
     window.goPage = function (p) { currentPage = p; loadData() };
+
+    /* ── Selection & Delete ── */
+    window.toggleSelectAll = function (checked) {
+        document.querySelectorAll('.row-check').forEach(cb => {
+            cb.checked = checked;
+            const id = parseInt(cb.value);
+            if (checked) selectedIds.add(id); else selectedIds.delete(id);
+        });
+        updateBulkBar();
+    };
+    window.toggleRowCheck = function (id, checked) {
+        if (checked) selectedIds.add(id); else selectedIds.delete(id);
+        const all = document.getElementById('selectAll');
+        const total = document.querySelectorAll('.row-check').length;
+        if (all) all.checked = selectedIds.size === total && total > 0;
+        updateBulkBar();
+    };
+    function updateBulkBar() {
+        const bar = document.getElementById('bulkBar');
+        const cnt = document.getElementById('bulkCount');
+        if (!bar) return;
+        if (selectedIds.size > 0) { bar.classList.remove('hidden'); cnt.textContent = selectedIds.size + ' selected'; }
+        else { bar.classList.add('hidden'); }
+    }
+    window.deleteSingle = async function (id) {
+        if (!confirm('Delete sentence #' + id + ' and all its recordings?')) return;
+        try {
+            const r = await fetch('/api/data', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+            if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
+            loadData();
+        } catch (e) { alert('Delete failed: ' + e.message) }
+    };
+    window.bulkDelete = async function () {
+        const ids = Array.from(selectedIds);
+        if (!confirm('Delete ' + ids.length + ' sentence(s) and all their recordings?')) return;
+        try {
+            const r = await fetch('/api/data', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+            if (!r.ok) { const d = await r.json(); throw new Error(d.error); }
+            loadData();
+        } catch (e) { alert('Delete failed: ' + e.message) }
+    };
 
     /* ── Admin Recording ── */
     const adminRecBlobs = {};// sentenceId -> {blob, duration}

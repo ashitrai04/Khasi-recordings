@@ -2,11 +2,12 @@ const supabase = require('../lib/supabase');
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     if (req.method === 'PATCH') return handleUpdate(req, res);
+    if (req.method === 'DELETE') return handleDelete(req, res);
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
@@ -73,6 +74,24 @@ async function handleUpdate(req, res) {
         res.json({ ok: true });
     } catch (err) {
         console.error('Update error:', err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+async function handleDelete(req, res) {
+    try {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'ids array required' });
+        }
+        // Delete recordings first (FK cascade should handle it, but be safe)
+        await supabase.from('recordings').delete().in('sentence_id', ids);
+        // Delete sentences
+        const { error } = await supabase.from('sentences').delete().in('id', ids);
+        if (error) throw error;
+        res.json({ ok: true, deleted: ids.length });
+    } catch (err) {
+        console.error('Delete error:', err);
         res.status(500).json({ error: err.message });
     }
 }
