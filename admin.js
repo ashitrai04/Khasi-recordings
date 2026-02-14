@@ -13,6 +13,7 @@
     const dataTableWrap = el('dataTableWrap'), dataPagination = el('dataPagination');
 
     let currentPage = 1;
+    let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0;
 
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
@@ -99,11 +100,10 @@
     }
 
     function renderData(d) {
-        let h = '<table class="data-table"><thead><tr><th>#</th><th>ID</th><th>English</th><th>Khasi</th><th>Recordings</th><th>Actions</th></tr></thead><tbody>';
-        d.rows.forEach((r, i) => {
-            const n = (d.page - 1) * d.limit + i + 1;
+        let h = '<table class="data-table"><thead><tr><th>ID</th><th>English</th><th>Khasi</th><th>Record</th><th>Recordings</th><th>Edit</th></tr></thead><tbody>';
+        d.rows.forEach((r) => {
             const recCount = r.recordings ? r.recordings.length : 0;
-            let recHtml = '<span class="rec-status pending">0 recordings</span>';
+            let recHtml = '<span class="rec-status pending">0</span>';
             if (recCount > 0) {
                 recHtml = '<div style="font-size:.78rem">';
                 r.recordings.forEach((rec, ri) => {
@@ -116,10 +116,15 @@
                 recHtml += '</div>';
             }
             h += `<tr data-id="${r.id}">
-      <td>${n}</td><td>${r.id}</td>
+      <td>${r.id}</td>
       <td class="wrap editable" data-field="english_text" data-table="sentences">${esc(r.english_text)}</td>
       <td class="wrap editable" data-field="khasi_text" data-table="sentences">${esc(r.khasi_text)}</td>
-      <td style="white-space:normal;min-width:200px">${recHtml}</td>
+      <td><div class="rec-cell">
+        <button class="btn-icon" onclick="adminRec(${r.id})" id="adminRecBtn-${r.id}" title="Record">🎤</button>
+        <button class="btn-icon" onclick="adminPlay(${r.id})" id="adminPlayBtn-${r.id}" title="Play" disabled style="opacity:.3">▶</button>
+        <button class="btn btn-xs btn-primary hidden" onclick="adminUpload(${r.id})" id="adminUpBtn-${r.id}">Upload</button>
+      </div></td>
+      <td style="white-space:normal;min-width:180px">${recHtml}</td>
       <td><button class="btn-icon edit-row-btn" title="Edit">✏️</button></td>
     </tr>`;
         });
@@ -140,6 +145,70 @@
         dataPagination.innerHTML = h;
     }
     window.goPage = function (p) { currentPage = p; loadData() };
+
+    /* ── Admin Recording ── */
+    const adminRecBlobs = {};// sentenceId -> {blob, duration}
+
+    window.adminRec = async function (sid) {
+        if (activeSentenceId === sid) { stopAdminRec(); return }
+        if (activeSentenceId !== null) stopAdminRec();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            activeCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = activeCtx.createMediaStreamSource(stream);
+            const proc = activeCtx.createScriptProcessor(4096, 1, 1);
+            const chunks = [];
+            proc.onaudioprocess = e => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))) };
+            source.connect(proc); proc.connect(activeCtx.destination);
+            activeSentenceId = sid; recStartTime = Date.now();
+            activeRecorder = { stream, source, processor: proc, chunks };
+            const btn = document.getElementById('adminRecBtn-' + sid);
+            if (btn) { btn.className = 'btn-icon recording'; btn.textContent = '⏹' }
+        } catch (e) { alert('Mic error: ' + e.message) }
+    };
+
+    function stopAdminRec() {
+        if (!activeRecorder || activeSentenceId === null) return;
+        const dur = (Date.now() - recStartTime) / 1000;
+        const sr = activeCtx.sampleRate; const chunks = activeRecorder.chunks;
+        activeRecorder.processor.disconnect(); activeRecorder.source.disconnect();
+        activeRecorder.stream.getTracks().forEach(t => t.stop());
+        try { activeCtx.close() } catch (_) { }
+        const raw = concatF32(chunks); const wav = buildWav(raw, sr, 16000);
+        const sid = activeSentenceId;
+        adminRecBlobs[sid] = { blob: wav, duration: dur };
+        activeSentenceId = null; activeRecorder = null; activeCtx = null;
+        // Update UI
+        const btn = document.getElementById('adminRecBtn-' + sid);
+        if (btn) { btn.className = 'btn-icon recorded'; btn.textContent = '✅' }
+        const playB = document.getElementById('adminPlayBtn-' + sid);
+        if (playB) { playB.disabled = false; playB.style.opacity = '1' }
+        const upB = document.getElementById('adminUpBtn-' + sid);
+        if (upB) { upB.classList.remove('hidden') }
+    }
+
+    window.adminPlay = function (sid) {
+        const r = adminRecBlobs[sid]; if (!r) return;
+        const url = URL.createObjectURL(r.blob); const a = new Audio(url); a.play(); a.onended = () => URL.revokeObjectURL(url);
+    };
+
+    window.adminUpload = async function (sid) {
+        const r = adminRecBlobs[sid]; if (!r) return;
+        const upB = document.getElementById('adminUpBtn-' + sid);
+        if (upB) { upB.disabled = true; upB.textContent = 'Uploading…' }
+        try {
+            const b64 = await blobTo64(r.blob);
+            const adminUser = sessionStorage.getItem('admin_user') || 'admin';
+            const res = await fetch('/api/record', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recordings: [{ sentence_id: sid, speaker_id: adminUser, duration_seconds: r.duration, audio: b64 }] })
+            });
+            const d = await res.json(); if (!res.ok) throw new Error(d.error);
+            if (upB) { upB.textContent = '✓ Done'; upB.className = 'btn btn-xs btn-success' }
+            delete adminRecBlobs[sid];
+            setTimeout(() => loadData(), 1500);
+        } catch (e) { if (upB) { upB.disabled = false; upB.textContent = 'Retry' } alert('Upload failed: ' + e.message) }
+    };
 
     /* ── Inline Editing ── */
     function attachEditing() {
@@ -169,6 +238,19 @@
 
     window.playAudio = function (url) { const a = new Audio(url); a.play() };
 
+    /* ── Audio Utils ── */
+    function concatF32(ch) { const l = ch.reduce((s, c) => s + c.length, 0); const o = new Float32Array(l); let p = 0; for (const c of ch) { o.set(c, p); p += c.length } return o }
+    function resample(b, sr, dr) { if (sr === dr) return b; const r = sr / dr, l = Math.round(b.length / r), o = new Float32Array(l); for (let i = 0; i < l; i++)o[i] = b[Math.floor(i * r)] || 0; return o }
+    function buildWav(samples, sr, tr) {
+        const rs = resample(samples, sr, tr), n = rs.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+        const ws = (o, s) => { for (let i = 0; i < s.length; i++)v.setUint8(o + i, s.charCodeAt(i)) };
+        ws(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt '); v.setUint32(16, 16, true);
+        v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, tr, true); v.setUint32(28, tr * 2, true);
+        v.setUint16(32, 2, true); v.setUint16(34, 16, true); ws(36, 'data'); v.setUint32(40, n * 2, true);
+        for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, rs[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true) }
+        return new Blob([v], { type: 'audio/wav' });
+    }
+    function blobTo64(b) { return new Promise((ok, no) => { const r = new FileReader(); r.onloadend = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(b) }) }
     function esc(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
     function escAttr(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') }
     function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) + ' ' + dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) }
