@@ -84,7 +84,8 @@
         </div>
         <div class="card">
             <p style="color:var(--muted);font-size:.84rem;margin-bottom:6px">Upload Excel (.xlsx) or CSV with
-                <strong>english</strong> and <strong>khasi</strong> columns</p>
+                <strong>english</strong> and <strong>khasi</strong> columns
+            </p>
             <p style="color:var(--muted);font-size:.78rem;margin-bottom:14px">Max file size: <strong>50 MB</strong>.
                 Column names are flexible (english_text, English, ENGLISH, etc.)</p>
             <div class="drop-zone" id="dropZone">
@@ -104,10 +105,39 @@
     </div>
 
     <!-- DATA VIEWER (Unified — sentences with recordings) -->
-    <div id="dataView" class="container hidden">
+    <div id="dataView" class="container hidden" style="max-width:1200px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
             <button class="btn btn-ghost btn-sm" id="backFromData">← Back</button>
             <h2 style="font-size:1.1rem;font-weight:600">Sentences & Recordings</h2>
+        </div>
+        <!-- Filter Bar -->
+        <div class="filter-bar" id="filterBar">
+            <div class="filter-item">
+                <label class="form-label">Speaker</label>
+                <select class="input" id="filterSpeaker" style="min-width:140px">
+                    <option value="">All Speakers</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label class="form-label">Status</label>
+                <select class="input" id="filterRecorded">
+                    <option value="">All</option>
+                    <option value="yes">Recorded</option>
+                    <option value="no">Not Recorded</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label class="form-label">Sort</label>
+                <select class="input" id="filterSort">
+                    <option value="recorded_first">Recorded First</option>
+                    <option value="id_asc">ID ↑</option>
+                    <option value="id_desc">ID ↓</option>
+                </select>
+            </div>
+            <div class="filter-item" style="align-self:flex-end">
+                <button class="btn btn-primary btn-sm" id="applyFilters">Apply</button>
+                <button class="btn btn-ghost btn-sm" id="resetFilters">Reset</button>
+            </div>
         </div>
         <div id="dataTableWrap" class="table-wrap"></div>
         <div class="pagination" id="dataPagination"></div>

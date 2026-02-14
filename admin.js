@@ -11,6 +11,8 @@
     const dropZone = el('dropZone'), fileInput = el('fileInput'), uploadProgress = el('uploadProgress'), uploadLabel = el('uploadLabel'), uploadFill = el('uploadFill'), uploadStatus = el('uploadStatus');
     const backFromUpload = el('backFromUpload'), backFromData = el('backFromData');
     const dataTableWrap = el('dataTableWrap'), dataPagination = el('dataPagination');
+    const filterSpeaker = el('filterSpeaker'), filterRecorded = el('filterRecorded'), filterSort = el('filterSort');
+    const applyFilters = el('applyFilters'), resetFilters = el('resetFilters');
 
     let currentPage = 1;
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0;
@@ -58,6 +60,13 @@
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
 
+    /* ── Filters ── */
+    applyFilters.addEventListener('click', () => { currentPage = 1; loadData() });
+    resetFilters.addEventListener('click', () => {
+        filterSpeaker.value = ''; filterRecorded.value = ''; filterSort.value = 'recorded_first';
+        currentPage = 1; loadData();
+    });
+
     /* ── Upload ── */
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over') });
@@ -95,45 +104,69 @@
         dataPagination.innerHTML = '';
         selectedIds.clear(); updateBulkBar();
         try {
-            const r = await fetch(`/api/data?page=${currentPage}&limit=50`);
+            const params = new URLSearchParams({ page: currentPage, limit: 50, sort: filterSort.value });
+            if (filterSpeaker.value) params.set('speaker', filterSpeaker.value);
+            if (filterRecorded.value) params.set('recorded', filterRecorded.value);
+            const r = await fetch('/api/data?' + params.toString());
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            // Populate speaker dropdown
+            if (d.speakers && d.speakers.length > 0) {
+                const cur = filterSpeaker.value;
+                filterSpeaker.innerHTML = '<option value="">All Speakers</option>';
+                d.speakers.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s; opt.textContent = s;
+                    if (s === cur) opt.selected = true;
+                    filterSpeaker.appendChild(opt);
+                });
+            }
             renderData(d); renderPagination(d.total, d.page, d.limit);
         } catch (e) { dataTableWrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
     }
 
     function renderData(d) {
         let h = '<div class="bulk-bar hidden" id="bulkBar"><span id="bulkCount">0 selected</span><button class="btn btn-danger btn-sm" onclick="bulkDelete()">🗑 Delete Selected</button></div>';
-        h += '<table class="data-table"><thead><tr><th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" /></th><th>ID</th><th>English</th><th>Khasi</th><th>Record</th><th>Recordings</th><th>Actions</th></tr></thead><tbody>';
+        h += '<table class="data-table"><thead><tr>';
+        h += '<th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" /></th>';
+        h += '<th>ID</th><th>English</th><th>Khasi</th>';
+        h += '<th>Speaker</th><th>Gender</th><th>Age</th>';
+        h += '<th>Record</th><th>Duration</th><th>Actions</th>';
+        h += '</tr></thead><tbody>';
         d.rows.forEach((r) => {
             const recCount = r.recordings ? r.recordings.length : 0;
-            let recHtml = '<span class="rec-status pending">0</span>';
-            if (recCount > 0) {
-                recHtml = `<div style="font-size:.78rem"><span class="rec-status done">${recCount}</span>`;
-                r.recordings.forEach((rec, ri) => {
-                    const name = esc(rec.contributor_name || rec.speaker_id);
-                    const gender = rec.contributor_gender ? rec.contributor_gender : '';
-                    const age = rec.contributor_age ? rec.contributor_age : '';
-                    const loc = rec.contributor_location ? esc(rec.contributor_location) : '';
-                    const info = [gender, age ? age + 'y' : '', loc].filter(Boolean).join(' · ');
-                    recHtml += `<div style="margin-bottom:4px;padding:6px 0;${ri > 0 ? 'border-top:1px solid var(--border)' : ''}">
-          <div>👤 <strong>${name}</strong>${info ? ' <span style="color:var(--muted)">(' + info + ')</span>' : ''}</div>
-          <div style="color:var(--muted);margin-top:2px">⏱ ${rec.duration_seconds ? rec.duration_seconds.toFixed(1) + 's' : '—'} · 📅 ${fmtDate(rec.recorded_at)}</div>
-          ${rec.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + escAttr(rec.audio_path) + '\')">🔊 Play</span>' : ''}
-        </div>`;
+            // Get latest recording info for speaker columns
+            const latest = recCount > 0 ? r.recordings[0] : null;
+            const speakerName = latest ? esc(latest.contributor_name || latest.speaker_id) : '—';
+            const speakerGender = latest ? esc(latest.contributor_gender) || '—' : '—';
+            const speakerAge = latest ? (latest.contributor_age || '—') : '—';
+            const duration = latest && latest.duration_seconds ? latest.duration_seconds.toFixed(1) + 's' : '—';
+
+            let recHtml = '';
+            if (recCount > 1) {
+                // Show additional recordings beyond the first
+                recHtml = '<details style="font-size:.72rem;margin-top:4px"><summary style="cursor:pointer;color:var(--accent)">+' + (recCount - 1) + ' more</summary>';
+                r.recordings.slice(1).forEach(rec => {
+                    const n = esc(rec.contributor_name || rec.speaker_id);
+                    recHtml += `<div style="padding:3px 0;border-top:1px solid var(--border)">👤 ${n} · ${rec.duration_seconds ? rec.duration_seconds.toFixed(1) + 's' : '—'} · ${fmtDate(rec.recorded_at)} ${rec.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + escAttr(rec.audio_path) + '\')">🔊</span>' : ''}</div>`;
                 });
-                recHtml += '</div>';
+                recHtml += '</details>';
             }
+
             h += `<tr data-id="${r.id}">
       <td><input type="checkbox" class="row-check" value="${r.id}" onchange="toggleRowCheck(${r.id},this.checked)" ${selectedIds.has(r.id) ? 'checked' : ''} /></td>
       <td>${r.id}</td>
       <td class="wrap editable" data-field="english_text" data-table="sentences">${esc(r.english_text)}</td>
       <td class="wrap editable" data-field="khasi_text" data-table="sentences">${esc(r.khasi_text)}</td>
+      <td style="font-weight:600">${speakerName}</td>
+      <td>${speakerGender}</td>
+      <td>${speakerAge}</td>
       <td><div class="rec-cell">
         <button class="btn-icon" onclick="adminRec(${r.id})" id="adminRecBtn-${r.id}" title="Record">🎤</button>
         <button class="btn-icon" onclick="adminPlay(${r.id})" id="adminPlayBtn-${r.id}" title="Play" disabled style="opacity:.3">▶</button>
         <button class="btn btn-xs btn-primary hidden" onclick="adminUpload(${r.id})" id="adminUpBtn-${r.id}">Upload</button>
+        ${latest && latest.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + escAttr(latest.audio_path) + '\')" title="Play existing">🔊</span>' : ''}
       </div></td>
-      <td style="white-space:normal;min-width:180px">${recHtml}</td>
+      <td>${duration}${recHtml}</td>
       <td><div style="display:flex;gap:4px">
         <button class="btn-icon edit-row-btn" title="Edit">✏️</button>
         <button class="btn-icon" onclick="deleteSingle(${r.id})" title="Delete" style="color:var(--red)">🗑</button>
@@ -200,7 +233,7 @@
     };
 
     /* ── Admin Recording ── */
-    const adminRecBlobs = {};// sentenceId -> {blob, duration}
+    const adminRecBlobs = {};
 
     window.adminRec = async function (sid) {
         if (activeSentenceId === sid) { stopAdminRec(); return }
@@ -231,7 +264,6 @@
         const sid = activeSentenceId;
         adminRecBlobs[sid] = { blob: wav, duration: dur };
         activeSentenceId = null; activeRecorder = null; activeCtx = null;
-        // Update UI
         const btn = document.getElementById('adminRecBtn-' + sid);
         if (btn) { btn.className = 'btn-icon recorded'; btn.textContent = '✅' }
         const playB = document.getElementById('adminPlayBtn-' + sid);

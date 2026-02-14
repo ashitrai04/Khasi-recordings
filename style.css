@@ -738,6 +738,35 @@ table.data-table {
     display: none !important
 }
 
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 14px
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px
+}
+
+.filter-item .input {
+    min-width: 120px;
+    padding: 8px 10px;
+    font-size: .82rem
+}
+
+.filter-item .form-label {
+    margin-bottom: 0
+}
+
 /* Bulk Action Bar */
 .bulk-bar {
     display: flex;
