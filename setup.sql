@@ -21,33 +21,25 @@ CREATE TABLE sentences (
   created_at timestamptz DEFAULT now()
 );
 
--- 2. Contributors (speaker profile)
-CREATE TABLE contributors (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  name text NOT NULL,
-  gender text,
-  age integer,
-  location text,
-  created_at timestamptz DEFAULT now()
-);
-
--- 3. Recordings
+-- 2. Recordings (gender/age stored directly — no FK dependency)
 CREATE TABLE recordings (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   sentence_id bigint NOT NULL REFERENCES sentences(id) ON DELETE CASCADE,
-  contributor_id bigint REFERENCES contributors(id) ON DELETE SET NULL,
   speaker_id text NOT NULL,
+  speaker_gender text DEFAULT '',
+  speaker_age integer,
+  speaker_location text DEFAULT '',
   audio_path text,
   duration_seconds real,
   created_at timestamptz DEFAULT now()
 );
 
--- 4. Indexes
+-- 3. Indexes
 CREATE INDEX idx_rec_sentence ON recordings(sentence_id);
 CREATE INDEX idx_rec_speaker ON recordings(speaker_id);
-CREATE INDEX idx_rec_contributor ON recordings(contributor_id);
+CREATE INDEX idx_sentences_has_recording ON sentences(has_recording);
 
--- 5. Batch fetch unrecorded sentences for a speaker
+-- 4. Batch fetch unrecorded sentences for a speaker
 CREATE FUNCTION get_batch_sentences(p_speaker text, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0)
 RETURNS SETOF sentences LANGUAGE sql STABLE AS $$
   SELECT s.* FROM sentences s
@@ -57,7 +49,6 @@ RETURNS SETOF sentences LANGUAGE sql STABLE AS $$
   LIMIT p_limit OFFSET p_offset;
 $$;
 
--- 6. Disable RLS (no auth needed)
+-- 5. Disable RLS
 ALTER TABLE sentences DISABLE ROW LEVEL SECURITY;
 ALTER TABLE recordings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE contributors DISABLE ROW LEVEL SECURITY;

@@ -129,7 +129,7 @@
         h += '<table class="data-table"><thead><tr>';
         h += '<th style="width:36px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" /></th>';
         h += '<th>ID</th><th>English</th><th>Khasi</th>';
-        h += '<th>Speaker</th><th>Gender</th><th>Age</th>';
+        h += '<th>Speaker</th><th>Gender</th><th>Age</th><th>Location</th>';
         h += '<th>Record</th><th>Duration</th><th>Actions</th>';
         h += '</tr></thead><tbody>';
         d.rows.forEach((r) => {
@@ -139,6 +139,7 @@
             const speakerName = latest ? esc(latest.contributor_name || latest.speaker_id) : '—';
             const speakerGender = latest ? esc(latest.contributor_gender) || '—' : '—';
             const speakerAge = latest ? (latest.contributor_age || '—') : '—';
+            const speakerLocation = latest ? esc(latest.contributor_location) || '—' : '—';
             const duration = latest && latest.duration_seconds ? latest.duration_seconds.toFixed(1) + 's' : '—';
 
             let recHtml = '';
@@ -160,6 +161,7 @@
       <td style="font-weight:600">${speakerName}</td>
       <td>${speakerGender}</td>
       <td>${speakerAge}</td>
+      <td>${speakerLocation}</td>
       <td><div class="rec-cell">
         <button class="btn-icon" onclick="adminRec(${r.id})" id="adminRecBtn-${r.id}" title="Record">🎤</button>
         <button class="btn-icon" onclick="adminPlay(${r.id})" id="adminPlayBtn-${r.id}" title="Play" disabled style="opacity:.3">▶</button>
@@ -321,7 +323,16 @@
         } catch (e) { alert('Save failed: ' + e.message) }
     }
 
-    window.playAudio = function (url) { const a = new Audio(url); a.play() };
+    window.playAudio = function (url) {
+        try {
+            const a = new Audio(url);
+            a.volume = 1.0;
+            const p = a.play();
+            if (p !== undefined) {
+                p.catch(e => { console.error('Play error:', e); alert('Could not play audio: ' + e.message); });
+            }
+        } catch (e) { alert('Audio error: ' + e.message); }
+    };
 
     /* ── Audio Utils ── */
     function concatF32(ch) { const l = ch.reduce((s, c) => s + c.length, 0); const o = new Float32Array(l); let p = 0; for (const c of ch) { o.set(c, p); p += c.length } return o }

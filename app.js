@@ -8,7 +8,7 @@
     const submitAllBtn = el('submitAllBtn'), recStatus = el('recStatus'), recPagination = el('recPagination');
     const pageSizeSelect = el('pageSizeSelect'), successOverlay = el('successOverlay'), successMsg = el('successMsg'), successNextBtn = el('successNextBtn');
 
-    let speakerId = '', contributorId = null, pageSize = 30, offset = 0, totalRemaining = 0;
+    let speakerId = '', contributorId = null, speakerGender = '', speakerAge = '', speakerLocation = '', pageSize = 30, offset = 0, totalRemaining = 0;
     let sentences = [], recBlobs = {};// recBlobs[sentenceId]={blob,duration}
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0, recInterval = null;
 
@@ -18,7 +18,7 @@
 
     /* ── Registration ── */
     const savedContrib = localStorage.getItem('contributor');
-    if (savedContrib) { try { const c = JSON.parse(savedContrib); speakerId = c.speaker_id; contributorId = c.contributor_id; hide(regView); show(recView); speakerNameEl.textContent = c.name; loadSentences() } catch (e) { } }
+    if (savedContrib) { try { const c = JSON.parse(savedContrib); speakerId = c.speaker_id; contributorId = c.contributor_id; speakerGender = c.gender || ''; speakerAge = c.age || ''; speakerLocation = c.location || ''; hide(regView); show(recView); speakerNameEl.textContent = c.name; loadSentences() } catch (e) { } }
 
     regBtn.addEventListener('click', doRegister);
     regName.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister() });
@@ -27,6 +27,9 @@
         const name = regName.value.trim();
         if (!name) { regStatus.textContent = 'Name is required'; regStatus.className = 'status error'; return }
         regBtn.disabled = true; regStatus.textContent = 'Saving…'; regStatus.className = 'status';
+        speakerGender = regGender.value || '';
+        speakerAge = regAge.value || '';
+        speakerLocation = regLocation.value.trim() || '';
         try {
             const r = await fetch('/api/contributor', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -34,7 +37,7 @@
             });
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
             speakerId = d.speaker_id; contributorId = d.contributor_id;
-            localStorage.setItem('contributor', JSON.stringify({ speaker_id: speakerId, contributor_id: contributorId, name }));
+            localStorage.setItem('contributor', JSON.stringify({ speaker_id: speakerId, contributor_id: contributorId, name, gender: speakerGender, age: speakerAge, location: speakerLocation }));
             speakerNameEl.textContent = name; hide(regView); show(recView); loadSentences();
         } catch (e) { regStatus.textContent = e.message; regStatus.className = 'status error' }
         regBtn.disabled = false;
@@ -195,7 +198,16 @@
             for (const sidStr of ids) {
                 const sid = parseInt(sidStr); const r = recBlobs[sid];
                 const b64 = await blobTo64(r.blob);
-                recordings.push({ sentence_id: sid, speaker_id: speakerId, contributor_id: contributorId, duration_seconds: r.duration, audio: b64 });
+                recordings.push({
+                    sentence_id: sid,
+                    speaker_id: speakerId,
+                    contributor_id: contributorId,
+                    duration_seconds: r.duration,
+                    audio: b64,
+                    speaker_gender: speakerGender,
+                    speaker_age: speakerAge,
+                    speaker_location: speakerLocation
+                });
             }
             const res = await fetch('/api/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recordings }) });
             const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Upload failed');

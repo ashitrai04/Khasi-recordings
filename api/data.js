@@ -44,7 +44,7 @@ module.exports = async (req, res) => {
             try {
                 let recQuery = supabase
                     .from('recordings')
-                    .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, contributor_id')
+                    .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
                     .in('sentence_id', ids)
                     .order('created_at', { ascending: false });
 
@@ -79,32 +79,18 @@ module.exports = async (req, res) => {
                         });
                     }
                 } else if (recs && recs.length > 0) {
-                    // Try to get contributor info
-                    let contribMap = {};
-                    try {
-                        const contribIds = [...new Set(recs.map(r => r.contributor_id).filter(Boolean))];
-                        if (contribIds.length > 0) {
-                            const { data: contribs } = await supabase
-                                .from('contributors')
-                                .select('id, name, gender, age, location')
-                                .in('id', contribIds);
-                            (contribs || []).forEach(c => { contribMap[c.id] = c });
-                        }
-                    } catch (e) { /* contributors table may not exist */ }
-
                     recs.forEach(r => {
                         if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
-                        const c = contribMap[r.contributor_id] || {};
                         recMap[r.sentence_id].push({
                             rec_id: r.id,
                             speaker_id: r.speaker_id,
                             audio_path: r.audio_path,
                             duration_seconds: r.duration_seconds,
                             recorded_at: r.created_at,
-                            contributor_name: c.name || r.speaker_id,
-                            contributor_gender: c.gender || '',
-                            contributor_age: c.age || '',
-                            contributor_location: c.location || ''
+                            contributor_name: r.speaker_id,
+                            contributor_gender: r.speaker_gender || '',
+                            contributor_age: r.speaker_age || '',
+                            contributor_location: r.speaker_location || ''
                         });
                     });
                 }

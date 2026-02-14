@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
 
         const results = [];
         for (const rec of recordings) {
-            const { sentence_id, speaker_id, contributor_id, duration_seconds, audio } = rec;
+            const { sentence_id, speaker_id, duration_seconds, audio, speaker_gender, speaker_age, speaker_location } = rec;
             if (!sentence_id || !speaker_id || !audio) {
                 results.push({ sentence_id, ok: false, error: 'Missing required fields' });
                 continue;
@@ -33,13 +33,33 @@ module.exports = async (req, res) => {
             const audioUrl = urlData?.publicUrl || fileName;
 
             const insertObj = {
-                sentence_id: Number(sentence_id), speaker_id,
-                audio_path: audioUrl, duration_seconds: parseFloat(duration_seconds) || null
+                sentence_id: Number(sentence_id),
+                speaker_id,
+                audio_path: audioUrl,
+                duration_seconds: parseFloat(duration_seconds) || null
             };
-            if (contributor_id) insertObj.contributor_id = Number(contributor_id);
+            // Add gender/age/location if provided
+            if (speaker_gender) insertObj.speaker_gender = speaker_gender;
+            if (speaker_age) insertObj.speaker_age = parseInt(speaker_age) || null;
+            if (speaker_location) insertObj.speaker_location = speaker_location;
 
             const { error: dbErr } = await supabase.from('recordings').insert(insertObj);
-            if (dbErr) { results.push({ sentence_id, ok: false, error: dbErr.message }); continue; }
+            if (dbErr) {
+                console.error('DB insert error:', dbErr.message);
+                // If column doesn't exist yet, try without gender/age
+                if (dbErr.message.includes('speaker_gender') || dbErr.message.includes('speaker_age')) {
+                    const fallback = {
+                        sentence_id: Number(sentence_id),
+                        speaker_id,
+                        audio_path: audioUrl,
+                        duration_seconds: parseFloat(duration_seconds) || null
+                    };
+                    const { error: fbErr } = await supabase.from('recordings').insert(fallback);
+                    if (fbErr) { results.push({ sentence_id, ok: false, error: fbErr.message }); continue; }
+                } else {
+                    results.push({ sentence_id, ok: false, error: dbErr.message }); continue;
+                }
+            }
 
             await supabase.from('sentences').update({ has_recording: true }).eq('id', Number(sentence_id));
             results.push({ sentence_id, ok: true, audio_path: audioUrl });

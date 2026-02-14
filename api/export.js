@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
                 // Fetch recordings for this sentence
                 const { data: recs } = await supabase
                     .from('recordings')
-                    .select('speaker_id, audio_path, duration_seconds, created_at, contributors(name, gender, age, location)')
+                    .select('speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
                     .eq('sentence_id', s.id)
                     .order('created_at', { ascending: false });
 
@@ -32,10 +32,10 @@ module.exports = async (req, res) => {
                         res.write([
                             esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
                             esc(r.audio_path), esc(r.speaker_id),
-                            esc(r.contributors?.name || r.speaker_id),
-                            esc(r.contributors?.gender || ''),
-                            esc(r.contributors?.age || ''),
-                            esc(r.contributors?.location || ''),
+                            esc(r.speaker_id), // contributor_name is same as speaker_id now
+                            esc(r.speaker_gender || ''),
+                            esc(r.speaker_age || ''),
+                            esc(r.speaker_location || ''),
                             esc(r.duration_seconds || ''),
                             esc(r.created_at || '')
                         ].join(',') + '\n');
