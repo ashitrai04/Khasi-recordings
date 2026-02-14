@@ -1,88 +1,213 @@
 (function () {
     'use strict';
-    const speakerSetup = document.getElementById('speakerSetup'), speakerInput = document.getElementById('speakerInput'),
-        speakerSaveBtn = document.getElementById('speakerSaveBtn'), mainArea = document.getElementById('mainArea'),
-        khasiText = document.getElementById('khasiText'), englishText = document.getElementById('englishText'),
-        recordBtn = document.getElementById('recordBtn'), stopBtn = document.getElementById('stopBtn'),
-        playBtn = document.getElementById('playBtn'), submitBtn = document.getElementById('submitBtn'),
-        skipBtn = document.getElementById('skipBtn'), status = document.getElementById('status'),
-        recIndicator = document.getElementById('recIndicator'), recTimer = document.getElementById('recTimer'),
-        progressWrap = document.getElementById('progressWrap'), progressCount = document.getElementById('progressCount'),
-        waveCanvas = document.getElementById('waveformCanvas'), waveCtx = waveCanvas.getContext('2d');
 
-    let speakerId = localStorage.getItem('speaker_id') || '', currentSentence = null, audioCtx = null,
-        recorder = null, recorded = [], wavBlob = null, duration = 0, timerInterval = null, startTime = 0,
-        submitted = parseInt(localStorage.getItem('submitted_count') || '0', 10), analyser = null;
+    /* ── Elements ── */
+    const regView = el('regView'), recView = el('recView');
+    const regName = el('regName'), regGender = el('regGender'), regAge = el('regAge'), regLocation = el('regLocation'), regBtn = el('regBtn'), regStatus = el('regStatus');
+    const speakerNameEl = el('speakerName'), sentenceTableBody = el('sentenceTableBody'), mobileCards = el('mobileCards');
+    const submitAllBtn = el('submitAllBtn'), recStatus = el('recStatus'), recPagination = el('recPagination');
+    const pageSizeSelect = el('pageSizeSelect'), successOverlay = el('successOverlay'), successMsg = el('successMsg'), successNextBtn = el('successNextBtn');
 
-    if (speakerId) { speakerInput.value = speakerId; showMainArea() }
-    speakerSaveBtn.addEventListener('click', () => { const v = speakerInput.value.trim(); if (!v) return alert('Please enter your name'); speakerId = v; localStorage.setItem('speaker_id', speakerId); showMainArea() });
-    speakerInput.addEventListener('keydown', e => { if (e.key === 'Enter') speakerSaveBtn.click() });
+    let speakerId = '', contributorId = null, pageSize = 30, offset = 0, totalRemaining = 0;
+    let sentences = [], recBlobs = {};// recBlobs[sentenceId]={blob,duration}
+    let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0, recInterval = null;
 
-    function showMainArea() { speakerSetup.style.display = 'none'; mainArea.style.display = 'block'; updateProgress(); fetchNext() }
+    /* ── Helpers ── */
+    function el(id) { return document.getElementById(id) }
+    function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
 
-    async function fetchNext() {
-        setStatus('Fetching next sentence…'); resetRecState();
+    /* ── Registration ── */
+    const savedContrib = localStorage.getItem('contributor');
+    if (savedContrib) { try { const c = JSON.parse(savedContrib); speakerId = c.speaker_id; contributorId = c.contributor_id; hide(regView); show(recView); speakerNameEl.textContent = c.name; loadSentences() } catch (e) { } }
+
+    regBtn.addEventListener('click', doRegister);
+    regName.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister() });
+
+    async function doRegister() {
+        const name = regName.value.trim();
+        if (!name) { regStatus.textContent = 'Name is required'; regStatus.className = 'status error'; return }
+        regBtn.disabled = true; regStatus.textContent = 'Saving…'; regStatus.className = 'status';
         try {
-            const res = await fetch('/api/next-sentence?speaker_id=' + encodeURIComponent(speakerId));
-            if (!res.ok) throw new Error('Server error ' + res.status);
-            const data = await res.json();
-            if (data.done) { khasiText.textContent = '🎉 All done!'; englishText.textContent = 'You have recorded all available sentences. Thank you!'; disableAll(); setStatus('No more sentences.', 'success'); return }
-            currentSentence = data.sentence; khasiText.textContent = currentSentence.khasi_text; englishText.textContent = currentSentence.english_text; setStatus('Ready to record');
-        } catch (err) { console.error(err); setStatus('Error: ' + err.message, 'error') }
+            const r = await fetch('/api/contributor', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, gender: regGender.value, age: regAge.value, location: regLocation.value.trim() })
+            });
+            const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            speakerId = d.speaker_id; contributorId = d.contributor_id;
+            localStorage.setItem('contributor', JSON.stringify({ speaker_id: speakerId, contributor_id: contributorId, name }));
+            speakerNameEl.textContent = name; hide(regView); show(recView); loadSentences();
+        } catch (e) { regStatus.textContent = e.message; regStatus.className = 'status error' }
+        regBtn.disabled = false;
     }
 
-    recordBtn.addEventListener('click', async () => {
-        if (!currentSentence) return alert('No sentence loaded');
+    /* ── Page Size ── */
+    pageSizeSelect.addEventListener('change', () => { pageSize = parseInt(pageSizeSelect.value); offset = 0; loadSentences() });
+
+    /* ── Load Sentences ── */
+    async function loadSentences() {
+        recStatus.textContent = 'Loading sentences…'; recStatus.className = 'status';
+        recBlobs = {}; updateSubmitBtn();
+        try {
+            const r = await fetch(`/api/next-sentence?speaker_id=${encodeURIComponent(speakerId)}&limit=${pageSize}&offset=${offset}`);
+            const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            if (d.done || !d.sentences || d.sentences.length === 0) {
+                sentenceTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">🎉 All sentences recorded! Thank you!</td></tr>';
+                mobileCards.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">🎉 All sentences recorded! Thank you!</div>';
+                recPagination.innerHTML = ''; recStatus.textContent = ''; submitAllBtn.disabled = true; return;
+            }
+            sentences = d.sentences; totalRemaining = d.total || sentences.length;
+            renderTable(); renderMobileCards(); renderPagination();
+            recStatus.textContent = totalRemaining + ' sentences remaining'; recStatus.className = 'status';
+        } catch (e) { recStatus.textContent = 'Error: ' + e.message; recStatus.className = 'status error' }
+    }
+
+    /* ── Render ── */
+    function renderTable() {
+        let h = '';
+        sentences.forEach((s, i) => {
+            const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
+            h += `<tr id="row-${s.id}">
+      <td>${n}</td>
+      <td class="wrap" style="max-width:180px">${esc(s.english_text)}</td>
+      <td class="wrap" style="max-width:200px;font-weight:600">${esc(s.khasi_text)}</td>
+      <td><div class="rec-cell">
+        <button class="btn-icon ${hasRec ? 'recorded' : ''}" onclick="toggleRec(${s.id})" id="recBtn-${s.id}" title="${hasRec ? 'Re-record' : 'Record'}">
+          ${hasRec ? '✅' : '🎤'}
+        </button>
+        <button class="btn-icon" onclick="playRec(${s.id})" id="playBtn-${s.id}" title="Play" ${hasRec ? '' : 'disabled'} style="${hasRec ? '' : 'opacity:.3'}">▶</button>
+      </div></td></tr>`;
+        });
+        sentenceTableBody.innerHTML = h;
+    }
+
+    function renderMobileCards() {
+        let h = '';
+        sentences.forEach((s, i) => {
+            const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
+            h += `<div class="mobile-rec-row" id="mrow-${s.id}">
+      <div class="serial">#${n}</div>
+      <div class="khasi">${esc(s.khasi_text)}</div>
+      <div class="english">${esc(s.english_text)}</div>
+      <div class="actions">
+        <button class="btn-icon ${hasRec ? 'recorded' : ''}" onclick="toggleRec(${s.id})" id="mrecBtn-${s.id}" title="${hasRec ? 'Re-record' : 'Record'}">${hasRec ? '✅' : '🎤'}</button>
+        <button class="btn-icon" onclick="playRec(${s.id})" id="mplayBtn-${s.id}" ${hasRec ? '' : 'disabled'} style="${hasRec ? '' : 'opacity:.3'}">▶</button>
+        ${hasRec ? '<span class="rec-status done" style="font-size:.7rem">Recorded</span>' : '<span class="rec-status pending" style="font-size:.7rem">Pending</span>'}
+      </div>
+    </div>`;
+        });
+        mobileCards.innerHTML = h;
+    }
+
+    function renderPagination() {
+        const total = totalRemaining; const pg = Math.floor(offset / pageSize) + 1;
+        // Simple prev/next since we're paginating dynamically  
+        let h = `<span class="info">${sentences.length} shown · ${total} remaining</span>`;
+        if (offset > 0) h += `<button class="page-btn" onclick="prevPage()">‹ Previous</button>`;
+        if (sentences.length === pageSize && total > pageSize) h += `<button class="page-btn" onclick="nextPage()">Next ›</button>`;
+        recPagination.innerHTML = h;
+    }
+
+    window.nextPage = function () { offset += pageSize; loadSentences(); window.scrollTo(0, 0) };
+    window.prevPage = function () { offset = Math.max(0, offset - pageSize); loadSentences(); window.scrollTo(0, 0) };
+
+    /* ── Recording Logic ── */
+    window.toggleRec = async function (sid) {
+        // If already recording this sentence, stop
+        if (activeSentenceId === sid) { stopRecording(); return }
+        // If recording another, stop that first
+        if (activeSentenceId !== null) stopRecording();
+        // Start recording this sentence
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioCtx.createMediaStreamSource(stream);
-            analyser = audioCtx.createAnalyser(); analyser.fftSize = 256; source.connect(analyser);
-            const proc = audioCtx.createScriptProcessor(4096, 1, 1); recorded = [];
-            proc.onaudioprocess = e => { recorded.push(new Float32Array(e.inputBuffer.getChannelData(0))) };
-            source.connect(proc); proc.connect(audioCtx.destination);
-            recorder = { stream, source, processor: proc }; startTime = Date.now();
-            recordBtn.disabled = true; stopBtn.disabled = false; playBtn.disabled = true; submitBtn.disabled = true;
-            recIndicator.classList.add('active'); setStatus('Recording…');
-            timerInterval = setInterval(() => { const s = Math.floor((Date.now() - startTime) / 1000); recTimer.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') }, 500);
-            drawWaveform();
-        } catch (err) { alert(err.name === 'NotAllowedError' ? 'Microphone permission denied.' : 'Mic error: ' + err.message) }
-    });
+            activeCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = activeCtx.createMediaStreamSource(stream);
+            const proc = activeCtx.createScriptProcessor(4096, 1, 1);
+            const chunks = [];
+            proc.onaudioprocess = e => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))) };
+            source.connect(proc); proc.connect(activeCtx.destination);
+            activeSentenceId = sid; recStartTime = Date.now();
+            activeRecorder = { stream, source, processor: proc, chunks };
+            // Update UI
+            updateRecUI(sid, true);
+            recStatus.textContent = '🔴 Recording sentence #' + sid + '…'; recStatus.className = 'status error';
+        } catch (e) {
+            alert(e.name === 'NotAllowedError' ? 'Microphone permission denied' : 'Mic error: ' + e.message);
+        }
+    };
 
-    stopBtn.addEventListener('click', () => {
-        if (!recorder) return; clearInterval(timerInterval); duration = (Date.now() - startTime) / 1000;
-        recorder.processor.disconnect(); recorder.source.disconnect();
-        recorder.stream.getTracks().forEach(t => t.stop());
-        const sr = audioCtx.sampleRate; wavBlob = buildWav(concat32(recorded), sr, 16000);
-        try { audioCtx.close() } catch (_) { } recorder = null; analyser = null; recorded = [];
-        recordBtn.disabled = false; stopBtn.disabled = true; playBtn.disabled = false; submitBtn.disabled = false;
-        recIndicator.classList.remove('active'); setStatus('Ready (' + duration.toFixed(1) + 's). Play or submit.', 'success'); clearWave();
-    });
+    function stopRecording() {
+        if (!activeRecorder || activeSentenceId === null) return;
+        const dur = (Date.now() - recStartTime) / 1000;
+        const sr = activeCtx.sampleRate;
+        const chunks = activeRecorder.chunks;
+        activeRecorder.processor.disconnect(); activeRecorder.source.disconnect();
+        activeRecorder.stream.getTracks().forEach(t => t.stop());
+        try { activeCtx.close() } catch (_) { }
+        // Build WAV
+        const raw = concatF32(chunks); const wav = buildWav(raw, sr, 16000);
+        recBlobs[activeSentenceId] = { blob: wav, duration: dur };
+        updateRecUI(activeSentenceId, false);
+        const sid = activeSentenceId; activeSentenceId = null; activeRecorder = null; activeCtx = null;
+        recStatus.textContent = '✓ Recorded ' + dur.toFixed(1) + 's for sentence #' + sid; recStatus.className = 'status success';
+        updateSubmitBtn();
+    }
 
-    playBtn.addEventListener('click', () => { if (!wavBlob) return; const u = URL.createObjectURL(wavBlob); const a = new Audio(u); a.play(); a.onended = () => URL.revokeObjectURL(u) });
+    function updateRecUI(sid, isRecording) {
+        // Desktop
+        const btn = document.getElementById('recBtn-' + sid);
+        const playB = document.getElementById('playBtn-' + sid);
+        // Mobile
+        const mbtn = document.getElementById('mrecBtn-' + sid);
+        const mplayB = document.getElementById('mplayBtn-' + sid);
 
-    submitBtn.addEventListener('click', async () => {
-        if (!wavBlob || !currentSentence) return; setStatus('Uploading…'); submitBtn.disabled = true;
+        if (isRecording) {
+            if (btn) { btn.className = 'btn-icon recording'; btn.textContent = '⏹' }
+            if (mbtn) { mbtn.className = 'btn-icon recording'; mbtn.textContent = '⏹' }
+        } else {
+            const has = !!recBlobs[sid];
+            if (btn) { btn.className = 'btn-icon' + (has ? ' recorded' : ''); btn.textContent = has ? '✅' : '🎤' }
+            if (playB) { playB.disabled = !has; playB.style.opacity = has ? '1' : '.3' }
+            if (mbtn) { mbtn.className = 'btn-icon' + (has ? ' recorded' : ''); mbtn.textContent = has ? '✅' : '🎤' }
+            if (mplayB) { mplayB.disabled = !has; mplayB.style.opacity = has ? '1' : '.3' }
+        }
+    }
+
+    function updateSubmitBtn() {
+        const count = Object.keys(recBlobs).length;
+        submitAllBtn.disabled = count === 0;
+        submitAllBtn.textContent = count > 0 ? `✓ Submit ${count} Recording${count > 1 ? 's' : ''}` : '✓ Submit All Recordings';
+    }
+
+    /* ── Playback ── */
+    window.playRec = function (sid) {
+        const r = recBlobs[sid]; if (!r) return;
+        const url = URL.createObjectURL(r.blob); const a = new Audio(url); a.play(); a.onended = () => URL.revokeObjectURL(url);
+    };
+
+    /* ── Batch Submit ── */
+    submitAllBtn.addEventListener('click', doSubmit);
+    async function doSubmit() {
+        const ids = Object.keys(recBlobs);
+        if (ids.length === 0) return;
+        submitAllBtn.disabled = true; recStatus.textContent = 'Uploading ' + ids.length + ' recordings…'; recStatus.className = 'status';
         try {
-            const b64 = await blobTo64(wavBlob);
-            const res = await fetch('/api/record', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sentence_id: currentSentence.id, speaker_id: speakerId, duration_seconds: duration, audio: b64 })
-            });
-            if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Upload failed') }
-            submitted++; localStorage.setItem('submitted_count', submitted); updateProgress(); setStatus('Submitted! Loading next…', 'success'); await fetchNext();
-        } catch (err) { console.error(err); setStatus('Upload failed: ' + err.message, 'error'); submitBtn.disabled = false }
-    });
+            const recordings = [];
+            for (const sidStr of ids) {
+                const sid = parseInt(sidStr); const r = recBlobs[sid];
+                const b64 = await blobTo64(r.blob);
+                recordings.push({ sentence_id: sid, speaker_id: speakerId, contributor_id: contributorId, duration_seconds: r.duration, audio: b64 });
+            }
+            const res = await fetch('/api/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recordings }) });
+            const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Upload failed');
+            successMsg.textContent = `${d.submitted} recording${d.submitted > 1 ? 's' : ''} saved successfully!`;
+            successOverlay.classList.add('show');
+        } catch (e) { recStatus.textContent = 'Error: ' + e.message; recStatus.className = 'status error'; submitAllBtn.disabled = false }
+    }
 
-    skipBtn.addEventListener('click', () => fetchNext());
+    successNextBtn.addEventListener('click', () => { successOverlay.classList.remove('show'); offset = 0; loadSentences() });
 
-    function setStatus(m, t) { status.textContent = m; status.className = 'status' + (t ? ' ' + t : '') }
-    function resetRecState() { wavBlob = null; duration = 0; recordBtn.disabled = false; stopBtn.disabled = true; playBtn.disabled = true; submitBtn.disabled = true; recIndicator.classList.remove('active'); clearInterval(timerInterval); recTimer.textContent = '0:00'; clearWave() }
-    function disableAll() { [recordBtn, stopBtn, playBtn, submitBtn, skipBtn].forEach(b => b.disabled = true) }
-    function updateProgress() { if (submitted > 0) { progressWrap.style.display = 'block'; progressCount.textContent = submitted + ' recorded' } }
-    function blobTo64(b) { return new Promise((ok, no) => { const r = new FileReader(); r.onloadend = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(b) }) }
-
-    function concat32(ch) { const l = ch.reduce((s, c) => s + c.length, 0); const o = new Float32Array(l); let p = 0; for (const c of ch) { o.set(c, p); p += c.length } return o }
+    /* ── Audio Utils ── */
+    function concatF32(ch) { const l = ch.reduce((s, c) => s + c.length, 0); const o = new Float32Array(l); let p = 0; for (const c of ch) { o.set(c, p); p += c.length } return o }
     function resample(b, sr, dr) { if (sr === dr) return b; const r = sr / dr, l = Math.round(b.length / r), o = new Float32Array(l); for (let i = 0; i < l; i++)o[i] = b[Math.floor(i * r)] || 0; return o }
     function buildWav(samples, sr, tr) {
         const rs = resample(samples, sr, tr), n = rs.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
@@ -93,16 +218,6 @@
         for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, rs[i])); v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true) }
         return new Blob([v], { type: 'audio/wav' });
     }
-
-    function resizeCanvas() { const w = document.getElementById('waveformWrap'); waveCanvas.width = w.clientWidth; waveCanvas.height = w.clientHeight }
-    window.addEventListener('resize', resizeCanvas); resizeCanvas();
-    function clearWave() { waveCtx.fillStyle = '#0f1019'; waveCtx.fillRect(0, 0, waveCanvas.width, waveCanvas.height) } clearWave();
-    function drawWaveform() {
-        if (!analyser) return; requestAnimationFrame(drawWaveform);
-        const d = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(d);
-        const W = waveCanvas.width, H = waveCanvas.height; waveCtx.fillStyle = 'rgba(15,16,25,0.35)'; waveCtx.fillRect(0, 0, W, H);
-        const bars = Math.min(d.length, 64), bw = W / bars, g = waveCtx.createLinearGradient(0, H, 0, 0);
-        g.addColorStop(0, '#6366f1'); g.addColorStop(1, '#a78bfa');
-        for (let i = 0; i < bars; i++) { const h = d[i] / 255 * H * .9; waveCtx.fillStyle = g; waveCtx.fillRect(i * bw + 1, H - h, bw - 2, h) }
-    }
+    function blobTo64(b) { return new Promise((ok, no) => { const r = new FileReader(); r.onloadend = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(b) }) }
+    function esc(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 })();

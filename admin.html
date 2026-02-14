@@ -10,10 +10,30 @@
 </head>
 
 <body>
-    <div class="container">
+    <!-- LOGIN -->
+    <div id="loginView" class="login-wrap">
+        <div class="header">
+            <h1>🔐 Admin Login</h1>
+            <p>Khasi Speech Collection Platform</p>
+        </div>
+        <div class="card">
+            <label class="form-label">Username</label>
+            <input class="input" id="loginUser" placeholder="Username" autocomplete="username"
+                style="margin-bottom:12px" />
+            <label class="form-label">Password</label>
+            <input class="input" id="loginPass" type="password" placeholder="Password" autocomplete="current-password"
+                style="margin-bottom:16px" />
+            <button class="btn btn-primary" id="loginBtn" style="width:100%">Login</button>
+            <div class="status" id="loginStatus"></div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashView" class="container hidden">
         <div class="header">
             <h1>⚙️ Admin Dashboard</h1>
-            <p>Upload data, track progress, and export results</p>
+            <p>Welcome, <span id="adminName"></span> · <a href="#" id="logoutBtn" style="font-size:.82rem">Logout</a>
+            </p>
         </div>
         <div class="stats" id="statsGrid">
             <div class="stat-card">
@@ -29,16 +49,48 @@
                 <div class="stat-label">Speakers</div>
             </div>
         </div>
+        <div class="dash-grid">
+            <div class="dash-card" id="goUpload">
+                <div class="icon">📁</div>
+                <div class="label">Upload Data</div>
+                <div class="desc">Import CSV/Excel sentences</div>
+            </div>
+            <div class="dash-card" id="goData">
+                <div class="icon">📊</div>
+                <div class="label">View Data</div>
+                <div class="desc">Browse & edit all records</div>
+            </div>
+        </div>
         <div class="card">
-            <div class="card-title">📁 Upload Sentence Data</div>
-            <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px">Upload Excel (.xlsx) or CSV with columns:
-                <code>english_text</code>, <code>khasi_text</code></p>
+            <div class="card-title">🔗 Shareable Contributor Link</div>
+            <div class="link-box"><code id="shareLink">—</code><button class="btn btn-sm btn-primary"
+                    id="copyLinkBtn">Copy</button></div>
+        </div>
+        <div class="card">
+            <div class="card-title">📥 Export Dataset</div>
+            <p style="color:var(--muted);font-size:.84rem;margin-bottom:10px">Download CSV with sentences + recording
+                metadata</p>
+            <a class="btn btn-primary btn-sm" href="/api/export">Download CSV</a>
+        </div>
+    </div>
+
+    <!-- UPLOAD SECTION -->
+    <div id="uploadView" class="container hidden">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+            <button class="btn btn-ghost btn-sm" id="backFromUpload">← Back</button>
+            <h2 style="font-size:1.1rem;font-weight:600">Upload Sentence Data</h2>
+        </div>
+        <div class="card">
+            <p style="color:var(--muted);font-size:.84rem;margin-bottom:6px">Upload Excel (.xlsx) or CSV with
+                <strong>english</strong> and <strong>khasi</strong> columns</p>
+            <p style="color:var(--muted);font-size:.78rem;margin-bottom:14px">Max file size: <strong>50 MB</strong>.
+                Column names are flexible (english_text, English, ENGLISH, etc.)</p>
             <div class="drop-zone" id="dropZone">
                 <div class="icon">📂</div>
-                <p>Drag &amp; drop your file here, or click to browse</p><input type="file" id="fileInput"
-                    accept=".xlsx,.xls,.csv" style="display:none" />
+                <p>Drag & drop or click to browse</p><input type="file" id="fileInput" accept=".xlsx,.xls,.csv"
+                    style="display:none" />
             </div>
-            <div class="upload-progress" id="uploadProgress" style="display:none">
+            <div class="upload-progress hidden" id="uploadProgress">
                 <div class="label" id="uploadLabel">Uploading…</div>
                 <div class="bar">
                     <div class="fill" id="uploadFill" style="width:0%"></div>
@@ -46,19 +98,22 @@
             </div>
             <div class="status" id="uploadStatus"></div>
         </div>
-        <div class="card">
-            <div class="card-title">🔗 Shareable Contributor Link</div>
-            <p style="color:var(--muted);font-size:.88rem;margin-bottom:10px">Share this link with contributors:</p>
-            <div class="link-box"><code id="shareLink">—</code><button class="btn btn-sm btn-primary"
-                    id="copyLinkBtn">Copy</button></div>
-        </div>
-        <div class="card">
-            <div class="card-title">📥 Export Enriched Dataset</div>
-            <p style="color:var(--muted);font-size:.88rem;margin-bottom:14px">Download CSV with original sentences plus
-                recording metadata.</p>
-            <a class="btn btn-primary" href="/api/export">Download CSV</a>
-        </div>
     </div>
+
+    <!-- DATA VIEWER -->
+    <div id="dataView" class="container hidden">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <button class="btn btn-ghost btn-sm" id="backFromData">← Back</button>
+            <h2 style="font-size:1.1rem;font-weight:600">Data Viewer</h2>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="sentences">📝 Sentences</button>
+            <button class="tab-btn" data-tab="recordings">🎙️ Recordings</button>
+        </div>
+        <div id="dataTableWrap" class="table-wrap"></div>
+        <div class="pagination" id="dataPagination"></div>
+    </div>
+
     <script src="/admin.js"></script>
 </body>
 

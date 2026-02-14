@@ -3,49 +3,101 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <title>Khasi Speech Collection</title>
     <link rel="stylesheet" href="/style.css" />
 </head>
 
 <body>
-    <div class="container">
+    <!-- REGISTRATION -->
+    <div id="regView" class="container">
         <div class="header">
             <h1>🎙️ Khasi Speech Collection</h1>
-            <p>Read the Khasi sentence aloud and submit your recording</p>
+            <p>Help preserve the Khasi language by recording sentences</p>
         </div>
-        <div class="card" id="speakerSetup">
-            <div class="card-title">👤 Enter Your Name</div>
-            <div class="input-group">
-                <input class="input" id="speakerInput" placeholder="Your name or speaker ID…" />
-                <button class="btn btn-primary" id="speakerSaveBtn">Start</button>
-            </div>
-        </div>
-        <div id="mainArea" style="display:none">
-            <div class="progress-wrap" id="progressWrap" style="display:none">
-                <div class="progress-label"><span id="progressText">Your progress</span><span id="progressCount">0
-                        recorded</span></div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+        <div class="card">
+            <div class="card-title">👤 Your Details</div>
+            <div class="form-grid">
+                <div class="full">
+                    <label class="form-label">Full Name *</label>
+                    <input class="input" id="regName" placeholder="Enter your name" />
+                </div>
+                <div>
+                    <label class="form-label">Gender</label>
+                    <select class="input" id="regGender">
+                        <option value="">Select</option>
+                        <option>Male</option>
+                        <option>Female</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Age</label>
+                    <input class="input" id="regAge" type="number" placeholder="e.g. 25" min="5" max="120" />
+                </div>
+                <div class="full">
+                    <label class="form-label">Location</label>
+                    <input class="input" id="regLocation" placeholder="Village / Town / City" />
+                </div>
+                <div class="full" style="margin-top:6px">
+                    <button class="btn btn-primary" id="regBtn" style="width:100%">Start Recording →</button>
                 </div>
             </div>
-            <div class="sentence-card" id="sentenceCard">
-                <div class="khasi-text" id="khasiText">Loading…</div>
-                <div class="english-text" id="englishText"></div>
-            </div>
-            <div class="rec-indicator" id="recIndicator"><span class="rec-dot"></span><span>Recording… <span
-                        id="recTimer">0:00</span></span></div>
-            <div class="waveform-wrap" id="waveformWrap"><canvas id="waveformCanvas"></canvas></div>
-            <div class="controls">
-                <button class="btn btn-danger" id="recordBtn">⏺ Record</button>
-                <button class="btn btn-ghost" id="stopBtn" disabled>⏹ Stop</button>
-                <button class="btn btn-ghost" id="playBtn" disabled>▶ Play</button>
-                <button class="btn btn-success" id="submitBtn" disabled>✓ Submit</button>
-                <button class="btn btn-ghost" id="skipBtn">⏭ Skip</button>
-            </div>
-            <div class="status" id="status"></div>
+            <div class="status" id="regStatus"></div>
         </div>
     </div>
+
+    <!-- RECORDING VIEW -->
+    <div id="recView" class="container hidden">
+        <div class="header">
+            <h1>🎙️ Record Sentences</h1>
+            <p>Hi <span id="speakerName"></span> · Read each Khasi sentence aloud and record</p>
+        </div>
+        <div class="page-size">
+            <span>Show</span>
+            <select id="pageSizeSelect">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="30" selected>30</option>
+            </select>
+            <span>per page</span>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="table-wrap desktop-table">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px">#</th>
+                        <th>English</th>
+                        <th>Khasi</th>
+                        <th style="width:120px">Record</th>
+                    </tr>
+                </thead>
+                <tbody id="sentenceTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Mobile cards -->
+        <div class="mobile-cards" id="mobileCards"></div>
+
+        <div style="text-align:center;margin:20px 0">
+            <button class="btn btn-success" id="submitAllBtn" disabled>✓ Submit All Recordings</button>
+        </div>
+        <div class="status" id="recStatus"></div>
+        <div class="pagination" id="recPagination"></div>
+    </div>
+
+    <!-- SUCCESS OVERLAY -->
+    <div class="success-overlay" id="successOverlay">
+        <div class="success-box">
+            <div class="check">✅</div>
+            <h2>Submitted Successfully!</h2>
+            <p id="successMsg">Your recordings have been saved.</p>
+            <button class="btn btn-primary" id="successNextBtn" style="margin-top:16px">Continue Recording →</button>
+        </div>
+    </div>
+
     <script src="/app.js"></script>
 </body>
 
