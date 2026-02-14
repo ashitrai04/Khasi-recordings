@@ -105,11 +105,16 @@
             const recCount = r.recordings ? r.recordings.length : 0;
             let recHtml = '<span class="rec-status pending">0</span>';
             if (recCount > 0) {
-                recHtml = '<div style="font-size:.78rem">';
+                recHtml = `<div style="font-size:.78rem"><span class="rec-status done">${recCount}</span>`;
                 r.recordings.forEach((rec, ri) => {
-                    recHtml += `<div style="margin-bottom:4px;padding:4px 0;${ri > 0 ? 'border-top:1px solid var(--border)' : ''}">
-          <div><strong>${esc(rec.contributor_name)}</strong> ${rec.contributor_gender ? '· ' + esc(rec.contributor_gender) : ''} ${rec.contributor_age ? '· ' + rec.contributor_age + 'y' : ''} ${rec.contributor_location ? '· ' + esc(rec.contributor_location) : ''}</div>
-          <div style="color:var(--muted)">${rec.duration_seconds ? rec.duration_seconds.toFixed(1) + 's' : '—'} · ${fmtDate(rec.recorded_at)}</div>
+                    const name = esc(rec.contributor_name || rec.speaker_id);
+                    const gender = rec.contributor_gender ? rec.contributor_gender : '';
+                    const age = rec.contributor_age ? rec.contributor_age : '';
+                    const loc = rec.contributor_location ? esc(rec.contributor_location) : '';
+                    const info = [gender, age ? age + 'y' : '', loc].filter(Boolean).join(' · ');
+                    recHtml += `<div style="margin-bottom:4px;padding:6px 0;${ri > 0 ? 'border-top:1px solid var(--border)' : ''}">
+          <div>👤 <strong>${name}</strong>${info ? ' <span style="color:var(--muted)">(' + info + ')</span>' : ''}</div>
+          <div style="color:var(--muted);margin-top:2px">⏱ ${rec.duration_seconds ? rec.duration_seconds.toFixed(1) + 's' : '—'} · 📅 ${fmtDate(rec.recorded_at)}</div>
           ${rec.audio_path ? '<span class="audio-badge" onclick="playAudio(\'' + escAttr(rec.audio_path) + '\')">🔊 Play</span>' : ''}
         </div>`;
                 });

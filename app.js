@@ -68,8 +68,8 @@
             const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
             h += `<tr id="row-${s.id}">
       <td>${n}</td>
-      <td class="wrap" style="max-width:180px">${esc(s.english_text)}</td>
-      <td class="wrap" style="max-width:200px;font-weight:600">${esc(s.khasi_text)}</td>
+      <td class="wrap editable" style="max-width:180px;cursor:pointer" onclick="editCell(${s.id},'english_text',this)">${esc(s.english_text)}</td>
+      <td class="wrap editable" style="max-width:200px;font-weight:600;cursor:pointer" onclick="editCell(${s.id},'khasi_text',this)">${esc(s.khasi_text)}</td>
       <td><div class="rec-cell">
         <button class="btn-icon ${hasRec ? 'recorded' : ''}" onclick="toggleRec(${s.id})" id="recBtn-${s.id}" title="${hasRec ? 'Re-record' : 'Record'}">
           ${hasRec ? '✅' : '🎤'}
@@ -86,8 +86,8 @@
             const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
             h += `<div class="mobile-rec-row" id="mrow-${s.id}">
       <div class="serial">#${n}</div>
-      <div class="khasi">${esc(s.khasi_text)}</div>
-      <div class="english">${esc(s.english_text)}</div>
+      <div class="khasi editable" style="cursor:pointer" onclick="editCell(${s.id},'khasi_text',this)">${esc(s.khasi_text)}</div>
+      <div class="english editable" style="cursor:pointer" onclick="editCell(${s.id},'english_text',this)">${esc(s.english_text)}</div>
       <div class="actions">
         <button class="btn-icon ${hasRec ? 'recorded' : ''}" onclick="toggleRec(${s.id})" id="mrecBtn-${s.id}" title="${hasRec ? 'Re-record' : 'Record'}">${hasRec ? '✅' : '🎤'}</button>
         <button class="btn-icon" onclick="playRec(${s.id})" id="mplayBtn-${s.id}" ${hasRec ? '' : 'disabled'} style="${hasRec ? '' : 'opacity:.3'}">▶</button>
@@ -220,4 +220,29 @@
     }
     function blobTo64(b) { return new Promise((ok, no) => { const r = new FileReader(); r.onloadend = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(b) }) }
     function esc(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+    function escAttr(v) { if (!v) return ''; return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;') }
+
+    /* ── Inline Editing ── */
+    window.editCell = function (sid, field, cell) {
+        if (cell.querySelector('input')) return; // already editing
+        const oldVal = cell.textContent;
+        cell.innerHTML = `<input class="edit-input" value="${escAttr(oldVal)}" onblur="saveCell(${sid},'${field}',this)" onkeydown="if(event.key==='Enter')this.blur()" style="width:100%">`;
+        cell.querySelector('input').focus();
+    };
+
+    window.saveCell = async function (sid, field, input) {
+        const newVal = input.value;
+        const cell = input.parentElement;
+        cell.textContent = newVal;
+        // Update local sentence data
+        const s = sentences.find(x => x.id === sid);
+        if (s) s[field] = newVal;
+        // Save to server
+        try {
+            await fetch('/api/data', {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table: 'sentences', id: sid, updates: { [field]: newVal } })
+            });
+        } catch (e) { console.error('Save failed:', e) }
+    };
 })();
