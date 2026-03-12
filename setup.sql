@@ -42,8 +42,7 @@ CREATE INDEX idx_sentences_has_recording ON sentences(has_recording);
 CREATE FUNCTION get_batch_sentences(p_speaker text, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0)
 RETURNS SETOF sentences LANGUAGE sql STABLE AS $$
   SELECT s.* FROM sentences s
-  LEFT JOIN recordings r ON r.sentence_id = s.id AND r.speaker_id = p_speaker
-  WHERE r.id IS NULL
+  WHERE s.has_recording = false
   ORDER BY s.id ASC
   LIMIT p_limit OFFSET p_offset;
 $$;
