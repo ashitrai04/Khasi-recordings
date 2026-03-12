@@ -15,7 +15,6 @@ module.exports = async (req, res) => {
 
         const toInsert = rows
             .map((r) => ({
-                excel_row_id: r.id || r.ID || r.excel_row_id || null,
                 english_text: r.english_text || r.english || r.English || r.ENGLISH || '',
                 khasi_text: r.khasi_text || r.khasi || r.Khasi || r.KHASI || ''
             }))

@@ -7,14 +7,14 @@ module.exports = async (req, res) => {
     try {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename=khasi_speech_dataset.csv');
-        res.write('sentence_id,excel_row_id,english_text,khasi_text,audio_file_url,speaker_id,contributor_name,gender,age,location,duration_seconds,recorded_at\n');
+        res.write('sentence_id,english_text,khasi_text,audio_file_url,speaker_id,contributor_name,gender,age,location,duration_seconds,recorded_at\n');
 
         const PAGE = 500;
         let offset = 0, hasMore = true;
         while (hasMore) {
             const { data, error } = await supabase
                 .from('sentences')
-                .select('id, excel_row_id, english_text, khasi_text')
+                .select('id, english_text, khasi_text')
                 .order('id').range(offset, offset + PAGE - 1);
             if (error) throw error;
 
@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
                     // Write one row per recording (for ML training — each audio is a data point)
                     for (const r of recs) {
                         res.write([
-                            esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
+                            esc(s.id), esc(s.english_text), esc(s.khasi_text),
                             esc(r.audio_path), esc(r.speaker_id),
                             esc(r.speaker_id), // contributor_name is same as speaker_id now
                             esc(r.speaker_gender || ''),
@@ -43,7 +43,7 @@ module.exports = async (req, res) => {
                 } else {
                     // Sentence with no recording yet
                     res.write([
-                        esc(s.id), esc(s.excel_row_id), esc(s.english_text), esc(s.khasi_text),
+                        esc(s.id), esc(s.english_text), esc(s.khasi_text),
                         '', '', '', '', '', '', '', ''
                     ].join(',') + '\n');
                 }

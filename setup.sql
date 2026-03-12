@@ -14,7 +14,6 @@ DROP TABLE IF EXISTS sentences CASCADE;
 -- 1. Sentences
 CREATE TABLE sentences (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  excel_row_id integer,
   english_text text NOT NULL,
   khasi_text text NOT NULL,
   has_recording boolean DEFAULT false,
