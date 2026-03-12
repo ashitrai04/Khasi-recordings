@@ -42,7 +42,7 @@ CREATE INDEX idx_sentences_has_recording ON sentences(has_recording);
 CREATE FUNCTION get_batch_sentences(p_speaker text, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0)
 RETURNS SETOF sentences LANGUAGE sql STABLE AS $$
   SELECT s.* FROM sentences s
-  WHERE s.has_recording = false
+  WHERE s.has_recording = false OR s.has_recording IS NULL
   ORDER BY s.id ASC
   LIMIT p_limit OFFSET p_offset;
 $$;

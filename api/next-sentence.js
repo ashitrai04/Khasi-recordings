@@ -11,11 +11,11 @@ module.exports = async (req, res) => {
         const lim = Math.min(50, Math.max(1, parseInt(limit)));
         const off = Math.max(0, parseInt(offset));
 
-        // Fetch sentences that have NOT been recorded by ANYONE yet
+        // Fetch sentences that have NOT been recorded by ANYONE yet (false or null)
         const { data, count, error } = await supabase
             .from('sentences')
             .select('*', { count: 'exact' })
-            .eq('has_recording', false)
+            .or('has_recording.eq.false,has_recording.is.null')
             .order('id')
             .range(off, off + lim - 1);
 
