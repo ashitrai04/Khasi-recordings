@@ -187,18 +187,19 @@
         const url = URL.createObjectURL(r.blob); const a = new Audio(url); a.play(); a.onended = () => URL.revokeObjectURL(url);
     };
 
-    /* ── Batch Submit ── */
+    /* ── Batch Submit (one at a time to avoid payload size limits) ── */
     submitAllBtn.addEventListener('click', doSubmit);
     async function doSubmit() {
         const ids = Object.keys(recBlobs);
         if (ids.length === 0) return;
-        submitAllBtn.disabled = true; recStatus.textContent = 'Uploading ' + ids.length + ' recordings…'; recStatus.className = 'status';
-        try {
-            const recordings = [];
-            for (const sidStr of ids) {
-                const sid = parseInt(sidStr); const r = recBlobs[sid];
+        submitAllBtn.disabled = true;
+        let submitted = 0, failed = 0;
+        for (let i = 0; i < ids.length; i++) {
+            const sid = parseInt(ids[i]); const r = recBlobs[sid];
+            recStatus.textContent = `Uploading ${i + 1}/${ids.length}…`; recStatus.className = 'status';
+            try {
                 const b64 = await blobTo64(r.blob);
-                recordings.push({
+                const payload = { recordings: [{
                     sentence_id: sid,
                     speaker_id: speakerId,
                     contributor_id: contributorId,
@@ -207,13 +208,20 @@
                     speaker_gender: speakerGender,
                     speaker_age: speakerAge,
                     speaker_location: speakerLocation
-                });
-            }
-            const res = await fetch('/api/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recordings }) });
-            const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Upload failed');
-            successMsg.textContent = `${d.submitted} recording${d.submitted > 1 ? 's' : ''} saved successfully!`;
+                }] };
+                const res = await fetch('/api/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Upload failed');
+                submitted++;
+            } catch (e) { console.error('Failed sentence', sid, e.message); failed++; }
+        }
+        if (failed === 0) {
+            successMsg.textContent = `${submitted} recording${submitted > 1 ? 's' : ''} saved successfully!`;
             successOverlay.classList.add('show');
-        } catch (e) { recStatus.textContent = 'Error: ' + e.message; recStatus.className = 'status error'; submitAllBtn.disabled = false }
+        } else {
+            recStatus.textContent = `${submitted} uploaded, ${failed} failed. Try again.`; recStatus.className = 'status error';
+            submitAllBtn.disabled = false;
+        }
     }
 
     successNextBtn.addEventListener('click', () => { successOverlay.classList.remove('show'); offset = 0; loadSentences() });
