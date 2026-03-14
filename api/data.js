@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
 
         // Filter: only recorded or only unrecorded
         if (recorded === 'yes') query = query.eq('has_recording', true);
-        else if (recorded === 'no') query = query.eq('has_recording', false);
+        else if (recorded === 'no') query = query.or('has_recording.eq.false,has_recording.is.null');
 
         query = query.range(from, to);
         const { data, error, count } = await query;
@@ -109,12 +109,28 @@ module.exports = async (req, res) => {
             rows = rows.filter(r => r.recordings.length > 0);
         }
 
-        // Get unique speakers for filter dropdown
+        // Get ALL unique speakers for filter dropdown (paginate to avoid 1000-row limit)
         let speakers = [];
         try {
-            const { data: sp } = await supabase.from('recordings').select('speaker_id');
-            speakers = [...new Set((sp || []).map(s => s.speaker_id))].sort();
-        } catch (e) { }
+            const allSpeakers = new Set();
+            let spOffset = 0;
+            const spPage = 1000;
+            let hasMore = true;
+            while (hasMore) {
+                const { data: sp } = await supabase
+                    .from('recordings')
+                    .select('speaker_id')
+                    .range(spOffset, spOffset + spPage - 1);
+                if (sp && sp.length > 0) {
+                    sp.forEach(s => { if (s.speaker_id) allSpeakers.add(s.speaker_id); });
+                    hasMore = sp.length === spPage;
+                    spOffset += spPage;
+                } else {
+                    hasMore = false;
+                }
+            }
+            speakers = [...allSpeakers].sort();
+        } catch (e) { console.error('Speaker list error:', e.message); }
 
         res.json({ rows, total: count || 0, page: p, limit: lim, speakers });
     } catch (err) {
