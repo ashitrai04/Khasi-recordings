@@ -17,99 +17,117 @@ module.exports = async (req, res) => {
         const from = (p - 1) * lim;
         const to = from + lim - 1;
 
-        // Base query
-        let query = supabase.from('sentences').select('*', { count: 'exact' });
+        let data = [], count = 0, recMap = {};
 
-        // Sort
-        if (sort === 'recorded_first') {
-            query = query.order('has_recording', { ascending: false }).order('id', { ascending: true });
-        } else if (sort === 'id_desc') {
-            query = query.order('id', { ascending: false });
-        } else {
-            query = query.order('id', { ascending: true });
-        }
-
-        // Filter: only recorded or only unrecorded
-        if (recorded === 'yes') query = query.eq('has_recording', true);
-        else if (recorded === 'no') query = query.or('has_recording.eq.false,has_recording.is.null');
-
-        query = query.range(from, to);
-        const { data, error, count } = await query;
-        if (error) throw error;
-
-        // Fetch recordings for these sentence IDs
-        const ids = (data || []).map(s => s.id);
-        let recMap = {};
-        if (ids.length > 0) {
-            try {
-                let recQuery = supabase
+        if (speaker && speaker.trim()) {
+            // ── SPEAKER FILTER: Start from recordings table ──
+            // 1. Get ALL sentence_ids for this speaker (paginate past 1000 limit)
+            const speakerSentenceIds = new Set();
+            let rOffset = 0;
+            const rPage = 1000;
+            let rMore = true;
+            while (rMore) {
+                const { data: recs } = await supabase
                     .from('recordings')
-                    .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
-                    .in('sentence_id', ids)
-                    .order('created_at', { ascending: false });
-
-                // Filter by speaker name
-                if (speaker && speaker.trim()) {
-                    recQuery = recQuery.ilike('speaker_id', '%' + speaker.trim() + '%');
+                    .select('sentence_id')
+                    .ilike('speaker_id', '%' + speaker.trim() + '%')
+                    .range(rOffset, rOffset + rPage - 1);
+                if (recs && recs.length > 0) {
+                    recs.forEach(r => speakerSentenceIds.add(r.sentence_id));
+                    rMore = recs.length === rPage;
+                    rOffset += rPage;
+                } else {
+                    rMore = false;
                 }
+            }
 
-                const { data: recs, error: recErr } = await recQuery;
-                if (recErr) {
-                    console.error('Recordings query error:', recErr.message);
-                    // Try without contributor_id column in case FK issue
-                    const { data: recs2, error: recErr2 } = await supabase
+            const allIds = [...speakerSentenceIds];
+            count = allIds.length;
+
+            if (allIds.length > 0) {
+                // 2. Fetch the paginated subset of those sentences
+                let sQuery = supabase.from('sentences').select('*').in('id', allIds);
+                if (sort === 'id_desc') sQuery = sQuery.order('id', { ascending: false });
+                else sQuery = sQuery.order('id', { ascending: true });
+                if (recorded === 'yes') sQuery = sQuery.eq('has_recording', true);
+                else if (recorded === 'no') sQuery = sQuery.or('has_recording.eq.false,has_recording.is.null');
+                const { data: sData, error: sErr } = await sQuery.range(from, to);
+                if (sErr) throw sErr;
+                data = sData || [];
+
+                // 3. Fetch recordings for displayed sentences
+                if (data.length > 0) {
+                    const displayIds = data.map(s => s.id);
+                    const { data: recs } = await supabase
                         .from('recordings')
-                        .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at')
-                        .in('sentence_id', ids)
+                        .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
+                        .in('sentence_id', displayIds)
+                        .ilike('speaker_id', '%' + speaker.trim() + '%')
                         .order('created_at', { ascending: false });
-                    if (!recErr2 && recs2) {
-                        recs2.forEach(r => {
+                    if (recs) {
+                        recs.forEach(r => {
                             if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
                             recMap[r.sentence_id].push({
-                                rec_id: r.id,
-                                speaker_id: r.speaker_id,
-                                audio_path: r.audio_path,
-                                duration_seconds: r.duration_seconds,
-                                recorded_at: r.created_at,
-                                contributor_name: r.speaker_id,
-                                contributor_gender: '',
-                                contributor_age: '',
-                                contributor_location: ''
+                                rec_id: r.id, speaker_id: r.speaker_id,
+                                audio_path: r.audio_path, duration_seconds: r.duration_seconds,
+                                recorded_at: r.created_at, contributor_name: r.speaker_id,
+                                contributor_gender: r.speaker_gender || '',
+                                contributor_age: r.speaker_age || '',
+                                contributor_location: r.speaker_location || ''
                             });
                         });
                     }
-                } else if (recs && recs.length > 0) {
-                    recs.forEach(r => {
-                        if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
-                        recMap[r.sentence_id].push({
-                            rec_id: r.id,
-                            speaker_id: r.speaker_id,
-                            audio_path: r.audio_path,
-                            duration_seconds: r.duration_seconds,
-                            recorded_at: r.created_at,
-                            contributor_name: r.speaker_id,
-                            contributor_gender: r.speaker_gender || '',
-                            contributor_age: r.speaker_age || '',
-                            contributor_location: r.speaker_location || ''
-                        });
-                    });
                 }
-            } catch (e) {
-                console.error('Recordings fetch failed entirely:', e.message);
+            }
+        } else {
+            // ── NO SPEAKER FILTER: Normal query ──
+            let query = supabase.from('sentences').select('*', { count: 'exact' });
+            if (sort === 'recorded_first') {
+                query = query.order('has_recording', { ascending: false }).order('id', { ascending: true });
+            } else if (sort === 'id_desc') {
+                query = query.order('id', { ascending: false });
+            } else {
+                query = query.order('id', { ascending: true });
+            }
+            if (recorded === 'yes') query = query.eq('has_recording', true);
+            else if (recorded === 'no') query = query.or('has_recording.eq.false,has_recording.is.null');
+
+            query = query.range(from, to);
+            const { data: sData, error, count: sCount } = await query;
+            if (error) throw error;
+            data = sData || [];
+            count = sCount || 0;
+
+            // Fetch recordings for these sentences
+            const ids = data.map(s => s.id);
+            if (ids.length > 0) {
+                try {
+                    const { data: recs, error: recErr } = await supabase
+                        .from('recordings')
+                        .select('id, sentence_id, speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
+                        .in('sentence_id', ids)
+                        .order('created_at', { ascending: false });
+                    if (!recErr && recs) {
+                        recs.forEach(r => {
+                            if (!recMap[r.sentence_id]) recMap[r.sentence_id] = [];
+                            recMap[r.sentence_id].push({
+                                rec_id: r.id, speaker_id: r.speaker_id,
+                                audio_path: r.audio_path, duration_seconds: r.duration_seconds,
+                                recorded_at: r.created_at, contributor_name: r.speaker_id,
+                                contributor_gender: r.speaker_gender || '',
+                                contributor_age: r.speaker_age || '',
+                                contributor_location: r.speaker_location || ''
+                            });
+                        });
+                    }
+                } catch (e) { console.error('Recordings fetch error:', e.message); }
             }
         }
 
         // Build rows
-        let rows = (data || []).map(s => ({
-            ...s,
-            recordings: recMap[s.id] || []
-        }));
+        const rows = data.map(s => ({ ...s, recordings: recMap[s.id] || [] }));
 
-        if (speaker && speaker.trim()) {
-            rows = rows.filter(r => r.recordings.length > 0);
-        }
-
-        // Get ALL unique speakers for filter dropdown (paginate to avoid 1000-row limit)
+        // Get ALL unique speakers for filter dropdown
         let speakers = [];
         try {
             const allSpeakers = new Set();
@@ -132,7 +150,7 @@ module.exports = async (req, res) => {
             speakers = [...allSpeakers].sort();
         } catch (e) { console.error('Speaker list error:', e.message); }
 
-        res.json({ rows, total: count || 0, page: p, limit: lim, speakers });
+        res.json({ rows, total: count, page: p, limit: lim, speakers });
     } catch (err) {
         console.error('Data error:', err);
         res.status(500).json({ error: err.message });
