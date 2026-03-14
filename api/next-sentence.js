@@ -5,30 +5,41 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { speaker_id, limit = '30', offset = '0' } = req.query;
+        const { speaker_id, limit = '30' } = req.query;
         if (!speaker_id) return res.status(400).json({ error: 'speaker_id required' });
 
         const lim = Math.min(50, Math.max(1, parseInt(limit)));
-        const off = Math.max(0, parseInt(offset));
 
-        // Fetch sentences that have NOT been recorded by ANYONE yet (false or null)
-        const { data, count, error } = await supabase
+        // Get total count of unrecorded sentences
+        const { count: totalCount, error: countErr } = await supabase
             .from('sentences')
-            .select('*', { count: 'exact' })
+            .select('*', { count: 'exact', head: true })
+            .or('has_recording.eq.false,has_recording.is.null');
+
+        if (countErr) throw countErr;
+
+        if (!totalCount || totalCount === 0) {
+            return res.json({ done: true, sentences: [], total: 0, message: 'All sentences recorded!' });
+        }
+
+        // Pick a random starting offset so different users get different batches
+        const maxOffset = Math.max(0, totalCount - lim);
+        const randomOff = Math.floor(Math.random() * (maxOffset + 1));
+
+        const { data, error } = await supabase
+            .from('sentences')
+            .select('*')
             .or('has_recording.eq.false,has_recording.is.null')
             .order('id')
-            .range(off, off + lim - 1);
+            .range(randomOff, randomOff + lim - 1);
 
-        if (error) {
-            console.error('Fetch error:', error.message);
-            throw error;
-        }
+        if (error) throw error;
 
         if (!data || data.length === 0) {
             return res.json({ done: true, sentences: [], total: 0, message: 'All sentences recorded!' });
         }
 
-        res.json({ done: false, sentences: data, total: count || 0, limit: lim, offset: off });
+        res.json({ done: false, sentences: data, total: totalCount, limit: lim, offset: randomOff });
     } catch (err) {
         console.error('Next sentence error:', err);
         res.status(500).json({ error: err.message });

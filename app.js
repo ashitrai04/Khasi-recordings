@@ -8,8 +8,9 @@
     const submitAllBtn = el('submitAllBtn'), recStatus = el('recStatus'), recPagination = el('recPagination');
     const pageSizeSelect = el('pageSizeSelect'), successOverlay = el('successOverlay'), successMsg = el('successMsg'), successNextBtn = el('successNextBtn');
 
-    let speakerId = '', contributorId = null, speakerGender = '', speakerAge = '', speakerLocation = '', pageSize = 30, offset = 0, totalRemaining = 0;
-    let sentences = [], recBlobs = {};// recBlobs[sentenceId]={blob,duration}
+    let speakerId = '', contributorId = null, speakerGender = '', speakerAge = '', speakerLocation = '', pageSize = 30, totalRemaining = 0;
+    let sentences = [], recBlobs = {}; // recBlobs[sentenceId]={blob,duration}
+    let saveStatus = {}; // saveStatus[sentenceId] = 'saving' | 'saved' | 'failed'
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0, recInterval = null;
 
     /* ── Helpers ── */
@@ -44,14 +45,14 @@
     }
 
     /* ── Page Size ── */
-    pageSizeSelect.addEventListener('change', () => { pageSize = parseInt(pageSizeSelect.value); offset = 0; loadSentences() });
+    pageSizeSelect.addEventListener('change', () => { pageSize = parseInt(pageSizeSelect.value); loadSentences() });
 
     /* ── Load Sentences ── */
     async function loadSentences() {
         recStatus.textContent = 'Loading sentences…'; recStatus.className = 'status';
-        recBlobs = {}; updateSubmitBtn();
+        recBlobs = {}; saveStatus = {}; updateSubmitBtn();
         try {
-            const r = await fetch(`/api/next-sentence?speaker_id=${encodeURIComponent(speakerId)}&limit=${pageSize}&offset=${offset}`);
+            const r = await fetch(`/api/next-sentence?speaker_id=${encodeURIComponent(speakerId)}&limit=${pageSize}`);
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
             if (d.done || !d.sentences || d.sentences.length === 0) {
                 sentenceTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">🎉 All sentences recorded! Thank you!</td></tr>';
@@ -68,7 +69,12 @@
     function renderTable() {
         let h = '';
         sentences.forEach((s, i) => {
-            const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
+            const n = i + 1; const hasRec = !!recBlobs[s.id];
+            const ss = saveStatus[s.id];
+            const saveLabel = ss === 'saving' ? '<span style="color:var(--accent);font-size:.7rem">Saving…</span>'
+                : ss === 'saved' ? '<span style="color:var(--green, #4caf50);font-size:.7rem">Saved ✓</span>'
+                : ss === 'failed' ? '<span style="color:var(--red, #f44336);font-size:.7rem">Failed</span>'
+                : '';
             h += `<tr id="row-${s.id}">
       <td>${n}</td>
       <td class="wrap editable" style="max-width:180px;cursor:pointer" onclick="editCell(${s.id},'english_text',this)">${esc(s.english_text)}</td>
@@ -78,6 +84,7 @@
           ${hasRec ? '✅' : '🎤'}
         </button>
         <button class="btn-icon" onclick="playRec(${s.id})" id="playBtn-${s.id}" title="Play" ${hasRec ? '' : 'disabled'} style="${hasRec ? '' : 'opacity:.3'}">▶</button>
+        <span id="saveStatus-${s.id}">${saveLabel}</span>
       </div></td></tr>`;
         });
         sentenceTableBody.innerHTML = h;
@@ -86,7 +93,13 @@
     function renderMobileCards() {
         let h = '';
         sentences.forEach((s, i) => {
-            const n = offset + i + 1; const hasRec = !!recBlobs[s.id];
+            const n = i + 1; const hasRec = !!recBlobs[s.id];
+            const ss = saveStatus[s.id];
+            const statusBadge = ss === 'saving' ? '<span class="rec-status" style="font-size:.7rem;background:var(--accent,#2196f3);color:#fff">Saving…</span>'
+                : ss === 'saved' ? '<span class="rec-status done" style="font-size:.7rem">Saved ✓</span>'
+                : ss === 'failed' ? '<span class="rec-status" style="font-size:.7rem;background:var(--red,#f44336);color:#fff">Failed</span>'
+                : hasRec ? '<span class="rec-status done" style="font-size:.7rem">Recorded</span>'
+                : '<span class="rec-status pending" style="font-size:.7rem">Pending</span>';
             h += `<div class="mobile-rec-row" id="mrow-${s.id}">
       <div class="serial">#${n}</div>
       <div class="khasi editable" style="cursor:pointer" onclick="editCell(${s.id},'khasi_text',this)">${esc(s.khasi_text)}</div>
@@ -94,7 +107,7 @@
       <div class="actions">
         <button class="btn-icon ${hasRec ? 'recorded' : ''}" onclick="toggleRec(${s.id})" id="mrecBtn-${s.id}" title="${hasRec ? 'Re-record' : 'Record'}">${hasRec ? '✅' : '🎤'}</button>
         <button class="btn-icon" onclick="playRec(${s.id})" id="mplayBtn-${s.id}" ${hasRec ? '' : 'disabled'} style="${hasRec ? '' : 'opacity:.3'}">▶</button>
-        ${hasRec ? '<span class="rec-status done" style="font-size:.7rem">Recorded</span>' : '<span class="rec-status pending" style="font-size:.7rem">Pending</span>'}
+        <span id="msaveStatus-${s.id}">${statusBadge}</span>
       </div>
     </div>`;
         });
@@ -102,16 +115,13 @@
     }
 
     function renderPagination() {
-        const total = totalRemaining; const pg = Math.floor(offset / pageSize) + 1;
-        // Simple prev/next since we're paginating dynamically  
+        const total = totalRemaining;
         let h = `<span class="info">${sentences.length} shown · ${total} remaining</span>`;
-        if (offset > 0) h += `<button class="page-btn" onclick="prevPage()">‹ Previous</button>`;
-        if (sentences.length === pageSize && total > pageSize) h += `<button class="page-btn" onclick="nextPage()">Next ›</button>`;
+        if (total > pageSize) h += `<button class="page-btn" onclick="nextPage()">Next ›</button>`;
         recPagination.innerHTML = h;
     }
 
-    window.nextPage = function () { offset += pageSize; loadSentences(); window.scrollTo(0, 0) };
-    window.prevPage = function () { offset = Math.max(0, offset - pageSize); loadSentences(); window.scrollTo(0, 0) };
+    window.nextPage = function () { loadSentences(); window.scrollTo(0, 0) };
 
     /* ── Recording Logic ── */
     window.toggleRec = async function (sid) {
@@ -148,11 +158,14 @@
         try { activeCtx.close() } catch (_) { }
         // Build WAV
         const raw = concatF32(chunks); const wav = buildWav(raw, sr, 16000);
-        recBlobs[activeSentenceId] = { blob: wav, duration: dur };
-        updateRecUI(activeSentenceId, false);
-        const sid = activeSentenceId; activeSentenceId = null; activeRecorder = null; activeCtx = null;
+        const sid = activeSentenceId;
+        recBlobs[sid] = { blob: wav, duration: dur };
+        updateRecUI(sid, false);
+        activeSentenceId = null; activeRecorder = null; activeCtx = null;
         recStatus.textContent = '✓ Recorded ' + dur.toFixed(1) + 's for sentence #' + sid; recStatus.className = 'status success';
         updateSubmitBtn();
+        // Auto-save immediately in background (fire and forget)
+        autoSave(sid);
     }
 
     function updateRecUI(sid, isRecording) {
@@ -176,9 +189,76 @@
     }
 
     function updateSubmitBtn() {
-        const count = Object.keys(recBlobs).length;
-        submitAllBtn.disabled = count === 0;
-        submitAllBtn.textContent = count > 0 ? `✓ Submit ${count} Recording${count > 1 ? 's' : ''}` : '✓ Submit All Recordings';
+        const totalRec = Object.keys(recBlobs).length;
+        const unsaved = Object.keys(recBlobs).filter(id => saveStatus[id] !== 'saved').length;
+        submitAllBtn.disabled = totalRec === 0;
+        if (unsaved > 0) {
+            submitAllBtn.textContent = `✓ Submit ${unsaved} Recording${unsaved > 1 ? 's' : ''}`;
+        } else if (totalRec > 0) {
+            submitAllBtn.textContent = `✓ All ${totalRec} Saved!`;
+        } else {
+            submitAllBtn.textContent = '✓ Submit All Recordings';
+        }
+    }
+
+    /* ── Auto-Save (background upload after each recording) ── */
+    function autoSave(sid) {
+        saveStatus[sid] = 'saving';
+        updateSaveUI(sid);
+
+        blobTo64(recBlobs[sid].blob).then(b64 => {
+            const payload = { recordings: [{
+                sentence_id: sid,
+                speaker_id: speakerId,
+                contributor_id: contributorId,
+                duration_seconds: recBlobs[sid].duration,
+                audio: b64,
+                speaker_gender: speakerGender,
+                speaker_age: speakerAge,
+                speaker_location: speakerLocation
+            }] };
+            return fetch('/api/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }).then(res => res.json()).then(d => {
+            if (d.ok || (d.results && d.results.some(r => r.ok))) {
+                saveStatus[sid] = 'saved';
+            } else {
+                saveStatus[sid] = 'failed';
+            }
+            updateSaveUI(sid);
+            updateSubmitBtn();
+        }).catch(e => {
+            console.error('Auto-save failed for sentence', sid, e);
+            saveStatus[sid] = 'failed';
+            updateSaveUI(sid);
+            updateSubmitBtn();
+        });
+    }
+
+    function updateSaveUI(sid) {
+        const ss = saveStatus[sid];
+        // Desktop
+        const el1 = document.getElementById('saveStatus-' + sid);
+        // Mobile
+        const el2 = document.getElementById('msaveStatus-' + sid);
+
+        let desktopHtml = '', mobileHtml = '';
+        if (ss === 'saving') {
+            desktopHtml = '<span style="color:var(--accent,#2196f3);font-size:.7rem">Saving…</span>';
+            mobileHtml = '<span class="rec-status" style="font-size:.7rem;background:var(--accent,#2196f3);color:#fff">Saving…</span>';
+        } else if (ss === 'saved') {
+            desktopHtml = '<span style="color:var(--green,#4caf50);font-size:.7rem">Saved ✓</span>';
+            mobileHtml = '<span class="rec-status done" style="font-size:.7rem">Saved ✓</span>';
+        } else if (ss === 'failed') {
+            desktopHtml = '<span style="color:var(--red,#f44336);font-size:.7rem">Failed</span>';
+            mobileHtml = '<span class="rec-status" style="font-size:.7rem;background:var(--red,#f44336);color:#fff">Failed</span>';
+        }
+
+        if (el1) el1.innerHTML = desktopHtml;
+        if (el2) el2.innerHTML = mobileHtml;
     }
 
     /* ── Playback ── */
@@ -187,16 +267,24 @@
         const url = URL.createObjectURL(r.blob); const a = new Audio(url); a.play(); a.onended = () => URL.revokeObjectURL(url);
     };
 
-    /* ── Batch Submit (one at a time to avoid payload size limits) ── */
+    /* ── Batch Submit (only unsaved recordings) ── */
     submitAllBtn.addEventListener('click', doSubmit);
     async function doSubmit() {
-        const ids = Object.keys(recBlobs);
-        if (ids.length === 0) return;
+        const unsavedIds = Object.keys(recBlobs).filter(id => saveStatus[id] !== 'saved');
+        // If all already auto-saved, show success!
+        if (unsavedIds.length === 0) {
+            const totalSaved = Object.keys(recBlobs).length;
+            if (totalSaved > 0) {
+                successMsg.textContent = `${totalSaved} recording${totalSaved > 1 ? 's' : ''} saved successfully!`;
+                successOverlay.classList.add('show');
+            }
+            return;
+        }
         submitAllBtn.disabled = true;
         let submitted = 0, failed = 0;
-        for (let i = 0; i < ids.length; i++) {
-            const sid = parseInt(ids[i]); const r = recBlobs[sid];
-            recStatus.textContent = `Uploading ${i + 1}/${ids.length}…`; recStatus.className = 'status';
+        for (let i = 0; i < unsavedIds.length; i++) {
+            const sid = parseInt(unsavedIds[i]); const r = recBlobs[sid];
+            recStatus.textContent = `Uploading ${i + 1}/${unsavedIds.length}…`; recStatus.className = 'status';
             try {
                 const b64 = await blobTo64(r.blob);
                 const payload = { recordings: [{
@@ -212,19 +300,28 @@
                 const res = await fetch('/api/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const d = await res.json();
                 if (!res.ok) throw new Error(d.error || 'Upload failed');
+                saveStatus[sid] = 'saved';
+                updateSaveUI(sid);
                 submitted++;
-            } catch (e) { console.error('Failed sentence', sid, e.message); failed++; }
+            } catch (e) {
+                console.error('Failed sentence', sid, e.message);
+                saveStatus[sid] = 'failed';
+                updateSaveUI(sid);
+                failed++;
+            }
         }
         if (failed === 0) {
-            successMsg.textContent = `${submitted} recording${submitted > 1 ? 's' : ''} saved successfully!`;
+            const totalSaved = Object.keys(recBlobs).length;
+            successMsg.textContent = `${totalSaved} recording${totalSaved > 1 ? 's' : ''} saved successfully!`;
             successOverlay.classList.add('show');
         } else {
             recStatus.textContent = `${submitted} uploaded, ${failed} failed. Try again.`; recStatus.className = 'status error';
             submitAllBtn.disabled = false;
         }
+        updateSubmitBtn();
     }
 
-    successNextBtn.addEventListener('click', () => { successOverlay.classList.remove('show'); offset = 0; loadSentences() });
+    successNextBtn.addEventListener('click', () => { successOverlay.classList.remove('show'); loadSentences() });
 
     /* ── Audio Utils ── */
     function concatF32(ch) { const l = ch.reduce((s, c) => s + c.length, 0); const o = new Float32Array(l); let p = 0; for (const c of ch) { o.set(c, p); p += c.length } return o }
