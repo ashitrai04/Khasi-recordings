@@ -7,6 +7,7 @@
 CREATE OR REPLACE VIEW khasi_ml_dataset AS
 SELECT 
   s.id AS sentence_id,
+  s.excel_row_id,
   s.english_text,
   s.khasi_text,
   r.audio_path,

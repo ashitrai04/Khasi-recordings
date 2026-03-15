@@ -61,6 +61,11 @@
                 <div class="label">View Data</div>
                 <div class="desc">Browse sentences & recordings</div>
             </div>
+            <div class="dash-card" id="goLeaderboard">
+                <div class="icon">🏆</div>
+                <div class="label">Leaderboard</div>
+                <div class="desc">Recording rankings by speaker</div>
+            </div>
         </div>
         <div class="card">
             <div class="card-title">🔗 Shareable Contributor Link</div>
@@ -141,6 +146,21 @@
         </div>
         <div id="dataTableWrap" class="table-wrap"></div>
         <div class="pagination" id="dataPagination"></div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
+    </div>
+
+    <!-- LEADERBOARD VIEW -->
+    <div id="leaderboardView" class="container hidden" style="max-width:800px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+            <button class="btn btn-ghost btn-sm" id="backFromLeaderboard">← Back</button>
+            <h2 style="font-size:1.1rem;font-weight:600">🏆 Contributor Leaderboard</h2>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <span style="color:var(--muted);font-size:.84rem" id="lbSummary">Loading…</span>
+            </div>
+        </div>
+        <div id="leaderboardTableWrap" class="table-wrap"></div>
         <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 

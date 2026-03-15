@@ -48,20 +48,42 @@
         <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
 
+    <!-- LEADERBOARD VIEW (landing page for registered users) -->
+    <div id="leaderboardView" class="container hidden" style="max-width:800px">
+        <div class="header">
+            <h1>🏆 Leaderboard</h1>
+            <p>Recording rankings · Hi <span id="lbSpeakerName"></span></p>
+        </div>
+        <div style="text-align:center;margin-bottom:20px">
+            <button class="btn btn-primary" id="goRecordFromLb" style="font-size:1rem;padding:12px 32px">🎙️ Start Recording</button>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <span style="color:var(--muted);font-size:.84rem" id="userLbSummary">Loading…</span>
+                <span style="font-weight:700;color:var(--accent);font-size:.9rem" id="userLbRank"></span>
+            </div>
+        </div>
+        <div id="userLeaderboardWrap" class="table-wrap"></div>
+        <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
+    </div>
+
     <!-- RECORDING VIEW -->
     <div id="recView" class="container hidden">
         <div class="header">
             <h1>🎙️ Record Sentences</h1>
             <p>Hi <span id="speakerName"></span> · Read each Khasi sentence aloud and record</p>
         </div>
-        <div class="page-size">
-            <span>Show</span>
-            <select id="pageSizeSelect">
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="30" selected>30</option>
-            </select>
-            <span>per page</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+            <button class="btn btn-ghost btn-sm" id="goLeaderboardFromRec">🏆 View Leaderboard</button>
+            <div class="page-size" style="margin:0">
+                <span>Show</span>
+                <select id="pageSizeSelect">
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="30" selected>30</option>
+                </select>
+                <span>per page</span>
+            </div>
         </div>
 
         <!-- Desktop table -->

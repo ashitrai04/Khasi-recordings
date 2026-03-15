@@ -2,7 +2,7 @@
     'use strict';
 
     /* ── Elements ── */
-    const regView = el('regView'), recView = el('recView');
+    const regView = el('regView'), recView = el('recView'), leaderboardView = el('leaderboardView');
     const regName = el('regName'), regGender = el('regGender'), regAge = el('regAge'), regLocation = el('regLocation'), regBtn = el('regBtn'), regStatus = el('regStatus');
     const speakerNameEl = el('speakerName'), sentenceTableBody = el('sentenceTableBody'), mobileCards = el('mobileCards');
     const submitAllBtn = el('submitAllBtn'), recStatus = el('recStatus'), recPagination = el('recPagination');
@@ -16,10 +16,11 @@
     /* ── Helpers ── */
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
+    function showView(v) { [regView, recView, leaderboardView].forEach(x => hide(x)); show(v) }
 
     /* ── Registration ── */
     const savedContrib = localStorage.getItem('contributor');
-    if (savedContrib) { try { const c = JSON.parse(savedContrib); speakerId = c.speaker_id; contributorId = c.contributor_id; speakerGender = c.gender || ''; speakerAge = c.age || ''; speakerLocation = c.location || ''; hide(regView); show(recView); speakerNameEl.textContent = c.name; loadSentences() } catch (e) { } }
+    if (savedContrib) { try { const c = JSON.parse(savedContrib); speakerId = c.speaker_id; contributorId = c.contributor_id; speakerGender = c.gender || ''; speakerAge = c.age || ''; speakerLocation = c.location || ''; showView(leaderboardView); speakerNameEl.textContent = c.name; el('lbSpeakerName').textContent = c.name; loadUserLeaderboard() } catch (e) { } }
 
     regBtn.addEventListener('click', doRegister);
     regName.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister() });
@@ -39,9 +40,56 @@
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
             speakerId = d.speaker_id; contributorId = d.contributor_id;
             localStorage.setItem('contributor', JSON.stringify({ speaker_id: speakerId, contributor_id: contributorId, name, gender: speakerGender, age: speakerAge, location: speakerLocation }));
-            speakerNameEl.textContent = name; hide(regView); show(recView); loadSentences();
+            speakerNameEl.textContent = name; el('lbSpeakerName').textContent = name;
+            showView(leaderboardView); loadUserLeaderboard();
         } catch (e) { regStatus.textContent = e.message; regStatus.className = 'status error' }
         regBtn.disabled = false;
+    }
+
+    /* ── Leaderboard ↔ Recording navigation ── */
+    el('goRecordFromLb').addEventListener('click', () => { showView(recView); loadSentences() });
+    el('goLeaderboardFromRec').addEventListener('click', () => { showView(leaderboardView); loadUserLeaderboard() });
+
+    async function loadUserLeaderboard() {
+        const wrap = el('userLeaderboardWrap');
+        const summary = el('userLbSummary');
+        const rankEl = el('userLbRank');
+        wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
+        try {
+            const r = await fetch('/api/leaderboard');
+            const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
+            // Find current user's rank
+            const savedC = localStorage.getItem('contributor');
+            let currentName = '';
+            if (savedC) { try { currentName = JSON.parse(savedC).name || ''; } catch(_){} }
+            let myRank = -1;
+            d.leaderboard.forEach((s, i) => { if (s.name.toLowerCase() === currentName.toLowerCase()) myRank = i });
+            if (myRank >= 0) {
+                rankEl.textContent = 'Your rank: #' + (myRank + 1) + ' (' + d.leaderboard[myRank].count + ' recordings)';
+            } else {
+                rankEl.textContent = '';
+            }
+            renderUserLeaderboard(d.leaderboard, wrap, currentName);
+        } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
+    }
+
+    function renderUserLeaderboard(list, wrap, currentName) {
+        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings yet. Be the first!</p>'; return }
+        const medals = ['🥇', '🥈', '🥉'];
+        let h = '<table class="data-table"><thead><tr>';
+        h += '<th style="width:60px">Rank</th><th>Contributor</th><th style="width:120px">Recordings</th>';
+        h += '</tr></thead><tbody>';
+        list.forEach((s, i) => {
+            const rank = i < 3 ? medals[i] + ' ' + (i + 1) : (i + 1);
+            const isMe = currentName && s.name.toLowerCase() === currentName.toLowerCase();
+            const rowStyle = isMe ? ' style="background:rgba(139,92,246,0.15);border-left:3px solid var(--accent)"'
+                : i < 3 ? ' style="background:rgba(139,92,246,0.05)"' : '';
+            const nameExtra = isMe ? ' (You)' : '';
+            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:${isMe ? '700' : '500'}">${esc(s.name)}${nameExtra}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count}</span></td></tr>`;
+        });
+        h += '</tbody></table>';
+        wrap.innerHTML = h;
     }
 
     /* ── Page Size ── */

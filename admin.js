@@ -2,7 +2,7 @@
     'use strict';
 
     /* ── Elements ── */
-    const loginView = el('loginView'), dashView = el('dashView'), uploadView = el('uploadView'), dataView = el('dataView');
+    const loginView = el('loginView'), dashView = el('dashView'), uploadView = el('uploadView'), dataView = el('dataView'), leaderboardView = el('leaderboardView');
     const loginUser = el('loginUser'), loginPass = el('loginPass'), loginBtn = el('loginBtn'), loginStatus = el('loginStatus');
     const adminName = el('adminName'), logoutBtn = el('logoutBtn');
     const statSentences = el('statSentences'), statRecordings = el('statRecordings'), statSpeakers = el('statSpeakers');
@@ -20,7 +20,7 @@
 
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
-    function showView(v) { [loginView, dashView, uploadView, dataView].forEach(x => hide(x)); show(v) }
+    function showView(v) { [loginView, dashView, uploadView, dataView, leaderboardView].forEach(x => hide(x)); show(v) }
 
     /* ── Auth ── */
     const saved = sessionStorage.getItem('admin_user');
@@ -57,8 +57,38 @@
 
     goUpload.addEventListener('click', () => showView(uploadView));
     goData.addEventListener('click', () => { showView(dataView); currentPage = 1; loadData() });
+    el('goLeaderboard').addEventListener('click', () => { showView(leaderboardView); loadLeaderboard() });
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
+    el('backFromLeaderboard').addEventListener('click', () => { showView(dashView); loadStats() });
+
+    /* ── Leaderboard ── */
+    async function loadLeaderboard() {
+        const wrap = el('leaderboardTableWrap');
+        const summary = el('lbSummary');
+        wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
+        try {
+            const r = await fetch('/api/leaderboard');
+            const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
+            renderLeaderboard(d.leaderboard, wrap);
+        } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
+    }
+
+    function renderLeaderboard(list, wrap) {
+        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings yet</p>'; return }
+        const medals = ['🥇', '🥈', '🥉'];
+        let h = '<table class="data-table"><thead><tr>';
+        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:120px">Recordings</th>';
+        h += '</tr></thead><tbody>';
+        list.forEach((s, i) => {
+            const rank = i < 3 ? medals[i] + ' ' + (i + 1) : (i + 1);
+            const rowStyle = i < 3 ? ' style="background:rgba(139,92,246,0.08)"' : '';
+            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:600">${esc(s.name)}</td><td>${esc(s.gender) || '—'}</td><td>${esc(s.location) || '—'}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count}</span></td></tr>`;
+        });
+        h += '</tbody></table>';
+        wrap.innerHTML = h;
+    }
 
     /* ── Filters ── */
     applyFilters.addEventListener('click', () => { currentPage = 1; loadData() });
