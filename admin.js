@@ -62,22 +62,36 @@
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
     /* ── Leaderboard ── */
+    let lbPeriod = 'all';
     el('backFromLeaderboard').addEventListener('click', () => { showView(dashView); loadStats() });
+
+    // Period tab clicks
+    document.querySelectorAll('.lb-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            lbPeriod = tab.dataset.period;
+            loadLeaderboard();
+        });
+    });
+
+    const periodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     async function loadLeaderboard() {
         const wrap = el('leaderboardTableWrap');
         const summary = el('lbSummary');
         wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
         try {
-            const r = await fetch('/api/leaderboard');
+            const r = await fetch('/api/leaderboard?period=' + lbPeriod);
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
-            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
+            const label = periodLabels[lbPeriod] || 'All Time';
+            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' recordings (' + label + ')';
             renderLeaderboard(d.leaderboard, wrap);
         } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
     }
 
     function renderLeaderboard(list, wrap) {
-        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings yet</p>'; return }
+        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings for this period</p>'; return }
         const medals = ['🥇', '🥈', '🥉'];
         let h = '<table class="data-table"><thead><tr>';
         h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:100px">Recordings</th>';

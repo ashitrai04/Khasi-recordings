@@ -57,6 +57,18 @@
         <div style="text-align:center;margin-bottom:20px">
             <button class="btn btn-primary" id="goRecordFromLb" style="font-size:1rem;padding:12px 32px">🎙️ Start Recording</button>
         </div>
+        <div id="userLbPeriodTabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;justify-content:center">
+            <button class="btn btn-sm ulb-tab active" data-period="all">🏅 All Time</button>
+            <button class="btn btn-sm ulb-tab" data-period="today">📅 Today</button>
+            <button class="btn btn-sm ulb-tab" data-period="yesterday">⏪ Yesterday</button>
+            <button class="btn btn-sm ulb-tab" data-period="week">📊 This Week</button>
+            <button class="btn btn-sm ulb-tab" data-period="month">📆 This Month</button>
+        </div>
+        <style>
+            .ulb-tab{background:var(--card);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .2s}
+            .ulb-tab:hover{border-color:var(--accent);color:var(--text)}
+            .ulb-tab.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+        </style>
         <div class="card" style="margin-bottom:16px">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                 <span style="color:var(--muted);font-size:.84rem" id="userLbSummary">Loading…</span>

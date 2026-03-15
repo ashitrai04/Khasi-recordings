@@ -47,8 +47,21 @@
     }
 
     /* ── Leaderboard ↔ Recording navigation ── */
+    let userLbPeriod = 'all';
     el('goRecordFromLb').addEventListener('click', () => { showView(recView); loadSentences() });
     el('goLeaderboardFromRec').addEventListener('click', () => { showView(leaderboardView); loadUserLeaderboard() });
+
+    // User period tab clicks
+    document.querySelectorAll('.ulb-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.ulb-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            userLbPeriod = tab.dataset.period;
+            loadUserLeaderboard();
+        });
+    });
+
+    const userPeriodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     async function loadUserLeaderboard() {
         const wrap = el('userLeaderboardWrap');
@@ -56,9 +69,10 @@
         const rankEl = el('userLbRank');
         wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
         try {
-            const r = await fetch('/api/leaderboard');
+            const r = await fetch('/api/leaderboard?period=' + userLbPeriod);
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
-            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
+            const label = userPeriodLabels[userLbPeriod] || 'All Time';
+            summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' recordings (' + label + ')';
             // Find current user's rank
             const savedC = localStorage.getItem('contributor');
             let currentName = '';
@@ -75,7 +89,7 @@
     }
 
     function renderUserLeaderboard(list, wrap, currentName) {
-        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings yet. Be the first!</p>'; return }
+        if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings for this period. Be the first!</p>'; return }
         const medals = ['🥇', '🥈', '🥉'];
         let h = '<table class="data-table"><thead><tr>';
         h += '<th style="width:60px">Rank</th><th>Contributor</th><th style="width:120px">Recordings</th>';

@@ -5,15 +5,46 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        // Paginate through ALL recordings to get every speaker
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const period = url.searchParams.get('period') || 'all';
+
+        // Calculate date filter
+        let dateFilter = null;
+        const now = new Date();
+        if (period === 'today') {
+            dateFilter = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        } else if (period === 'yesterday') {
+            const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            dateFilter = y.toISOString();
+            var dateEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        } else if (period === 'week') {
+            const w = new Date(now);
+            w.setDate(w.getDate() - 7);
+            dateFilter = w.toISOString();
+        } else if (period === 'month') {
+            const m = new Date(now);
+            m.setDate(m.getDate() - 30);
+            dateFilter = m.toISOString();
+        }
+
+        // Paginate through recordings with optional date filter
         let allRecordings = [];
         let from = 0;
         const PAGE = 1000;
         while (true) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('recordings')
-                .select('speaker_id, speaker_gender, speaker_location')
+                .select('speaker_id, speaker_gender, speaker_location, created_at')
                 .range(from, from + PAGE - 1);
+
+            if (dateFilter) {
+                query = query.gte('created_at', dateFilter);
+                if (period === 'yesterday' && dateEnd) {
+                    query = query.lt('created_at', dateEnd);
+                }
+            }
+
+            const { data, error } = await query;
             if (error) throw error;
             if (!data || data.length === 0) break;
             allRecordings = allRecordings.concat(data);
@@ -40,7 +71,7 @@ module.exports = async (req, res) => {
         const leaderboard = Object.values(speakerMap)
             .sort((a, b) => b.count - a.count);
 
-        // Fetch recent recordings for activity log (last 30)
+        // Fetch recent recordings for activity log (last 30, always unfiltered)
         const { data: recentData, error: recentErr } = await supabase
             .from('recordings')
             .select('sentence_id, speaker_id, speaker_gender, speaker_location, duration_seconds, created_at')
@@ -74,6 +105,7 @@ module.exports = async (req, res) => {
         res.json({
             leaderboard,
             recent: recentLog,
+            period,
             total_recordings: allRecordings.length,
             total_speakers: leaderboard.length
         });

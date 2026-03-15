@@ -165,6 +165,18 @@
                 <span style="color:var(--muted);font-size:.84rem" id="lbSummary">Loading…</span>
             </div>
         </div>
+        <div id="lbPeriodTabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+            <button class="btn btn-sm lb-tab active" data-period="all">🏅 All Time</button>
+            <button class="btn btn-sm lb-tab" data-period="today">📅 Today</button>
+            <button class="btn btn-sm lb-tab" data-period="yesterday">⏪ Yesterday</button>
+            <button class="btn btn-sm lb-tab" data-period="week">📊 This Week</button>
+            <button class="btn btn-sm lb-tab" data-period="month">📆 This Month</button>
+        </div>
+        <style>
+            .lb-tab{background:var(--card);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .2s}
+            .lb-tab:hover{border-color:var(--accent);color:var(--text)}
+            .lb-tab.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+        </style>
         <div id="leaderboardTableWrap" class="table-wrap"></div>
         <footer class="company-footer">© 2026 Yantrikaran Innovations Private Limited</footer>
     </div>
