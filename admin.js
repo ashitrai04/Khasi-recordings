@@ -2,7 +2,7 @@
     'use strict';
 
     /* ── Elements ── */
-    const loginView = el('loginView'), dashView = el('dashView'), uploadView = el('uploadView'), dataView = el('dataView'), leaderboardView = el('leaderboardView');
+    const loginView = el('loginView'), dashView = el('dashView'), uploadView = el('uploadView'), dataView = el('dataView'), leaderboardView = el('leaderboardView'), activityView = el('activityView');
     const loginUser = el('loginUser'), loginPass = el('loginPass'), loginBtn = el('loginBtn'), loginStatus = el('loginStatus');
     const adminName = el('adminName'), logoutBtn = el('logoutBtn');
     const statSentences = el('statSentences'), statRecordings = el('statRecordings'), statSpeakers = el('statSpeakers');
@@ -20,7 +20,7 @@
 
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
-    function showView(v) { [loginView, dashView, uploadView, dataView, leaderboardView].forEach(x => hide(x)); show(v) }
+    function showView(v) { [loginView, dashView, uploadView, dataView, leaderboardView, activityView].forEach(x => hide(x)); show(v) }
 
     /* ── Auth ── */
     const saved = sessionStorage.getItem('admin_user');
@@ -58,35 +58,22 @@
     goUpload.addEventListener('click', () => showView(uploadView));
     goData.addEventListener('click', () => { showView(dataView); currentPage = 1; loadData() });
     el('goLeaderboard').addEventListener('click', () => { showView(leaderboardView); loadLeaderboard() });
+    el('goActivity').addEventListener('click', () => { showView(activityView); loadActivity() });
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
-    /* ── Leaderboard + Activity Log ── */
-    let lbInterval = null;
-
-    el('backFromLeaderboard').addEventListener('click', () => { clearInterval(lbInterval); lbInterval = null; showView(dashView); loadStats() });
+    /* ── Leaderboard ── */
+    el('backFromLeaderboard').addEventListener('click', () => { showView(dashView); loadStats() });
 
     async function loadLeaderboard() {
         const wrap = el('leaderboardTableWrap');
-        const logWrap = el('activityLogWrap');
         const summary = el('lbSummary');
-        const refreshStatus = el('lbRefreshStatus');
+        wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
         try {
             const r = await fetch('/api/leaderboard');
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
             summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
             renderLeaderboard(d.leaderboard, wrap);
-            renderActivityLog(d.recent || [], logWrap);
-            refreshStatus.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-        } catch (e) {
-            wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>';
-        }
-        // Auto-refresh every 15 seconds
-        if (!lbInterval) {
-            lbInterval = setInterval(() => {
-                if (!leaderboardView.classList.contains('hidden')) loadLeaderboard();
-                else { clearInterval(lbInterval); lbInterval = null; }
-            }, 15000);
-        }
+        } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
     }
 
     function renderLeaderboard(list, wrap) {
@@ -102,6 +89,29 @@
         });
         h += '</tbody></table>';
         wrap.innerHTML = h;
+    }
+
+    /* ── Activity Log (separate view with auto-refresh) ── */
+    let actInterval = null;
+    el('backFromActivity').addEventListener('click', () => { clearInterval(actInterval); actInterval = null; showView(dashView); loadStats() });
+
+    async function loadActivity() {
+        const wrap = el('activityLogWrap');
+        const summary = el('activitySummary');
+        const refreshEl = el('activityRefreshStatus');
+        try {
+            const r = await fetch('/api/leaderboard');
+            const d = await r.json(); if (!r.ok) throw new Error(d.error);
+            summary.textContent = d.total_recordings.toLocaleString() + ' total recordings · Last 30 shown';
+            renderActivityLog(d.recent || [], wrap);
+            refreshEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
+        if (!actInterval) {
+            actInterval = setInterval(() => {
+                if (!activityView.classList.contains('hidden')) loadActivity();
+                else { clearInterval(actInterval); actInterval = null; }
+            }, 15000);
+        }
     }
 
     function renderActivityLog(logs, wrap) {
