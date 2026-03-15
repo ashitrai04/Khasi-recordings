@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
         while (true) {
             const { data, error } = await supabase
                 .from('recordings')
-                .select('speaker_id, contributor_name, contributor_gender, contributor_location')
+                .select('speaker_id, speaker_gender, speaker_location')
                 .range(from, from + PAGE - 1);
             if (error) throw error;
             if (!data || data.length === 0) break;
@@ -24,13 +24,13 @@ module.exports = async (req, res) => {
         // Group by speaker and count
         const speakerMap = {};
         allRecordings.forEach(r => {
-            const name = r.contributor_name || r.speaker_id || 'Unknown';
+            const name = r.speaker_id || 'Unknown';
             if (!speakerMap[name]) {
                 speakerMap[name] = {
                     name,
                     count: 0,
-                    gender: r.contributor_gender || '',
-                    location: r.contributor_location || ''
+                    gender: r.speaker_gender || '',
+                    location: r.speaker_location || ''
                 };
             }
             speakerMap[name].count++;
