@@ -92,7 +92,7 @@
         if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings for this period. Be the first!</p>'; return }
         const medals = ['🥇', '🥈', '🥉'];
         let h = '<table class="data-table"><thead><tr>';
-        h += '<th style="width:60px">Rank</th><th>Contributor</th><th style="width:120px">Recordings</th>';
+        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:100px">Recordings</th>';
         h += '</tr></thead><tbody>';
         list.forEach((s, i) => {
             const rank = i < 3 ? medals[i] + ' ' + (i + 1) : (i + 1);
@@ -100,7 +100,7 @@
             const rowStyle = isMe ? ' style="background:rgba(139,92,246,0.15);border-left:3px solid var(--accent)"'
                 : i < 3 ? ' style="background:rgba(139,92,246,0.05)"' : '';
             const nameExtra = isMe ? ' (You)' : '';
-            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:${isMe ? '700' : '500'}">${esc(s.name)}${nameExtra}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count}</span></td></tr>`;
+            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:${isMe ? '700' : '500'}">${esc(s.name)}${nameExtra}</td><td>${esc(s.gender) || '—'}</td><td>${esc(s.location) || '—'}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count}</span></td></tr>`;
         });
         h += '</tbody></table>';
         wrap.innerHTML = h;
