@@ -12,6 +12,8 @@
     let sentences = [], recBlobs = {}; // recBlobs[sentenceId]={blob,duration}
     let saveStatus = {}; // saveStatus[sentenceId] = 'saving' | 'saved' | 'failed'
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0, recInterval = null;
+    let userLbPeriod = 'all';
+    const userPeriodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     /* ── Helpers ── */
     function el(id) { return document.getElementById(id) }
@@ -47,7 +49,6 @@
     }
 
     /* ── Leaderboard ↔ Recording navigation ── */
-    let userLbPeriod = 'all';
     el('goRecordFromLb').addEventListener('click', () => { showView(recView); loadSentences() });
     el('goLeaderboardFromRec').addEventListener('click', () => { showView(leaderboardView); loadUserLeaderboard() });
 
@@ -60,8 +61,6 @@
             loadUserLeaderboard();
         });
     });
-
-    const userPeriodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     async function loadUserLeaderboard() {
         const wrap = el('userLeaderboardWrap');

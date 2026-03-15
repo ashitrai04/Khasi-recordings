@@ -17,6 +17,8 @@
     let currentPage = 1;
     let activeRecorder = null, activeCtx = null, activeSentenceId = null, recStartTime = 0;
     let selectedIds = new Set();
+    let lbPeriod = 'all';
+    const periodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     function el(id) { return document.getElementById(id) }
     function show(v) { v.classList.remove('hidden') } function hide(v) { v.classList.add('hidden') }
@@ -62,7 +64,6 @@
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
     /* ── Leaderboard ── */
-    let lbPeriod = 'all';
     el('backFromLeaderboard').addEventListener('click', () => { showView(dashView); loadStats() });
 
     // Period tab clicks
@@ -75,7 +76,6 @@
         });
     });
 
-    const periodLabels = { all: 'All Time', today: 'Today', yesterday: 'Yesterday', week: 'This Week', month: 'This Month' };
 
     async function loadLeaderboard() {
         const wrap = el('leaderboardTableWrap');
