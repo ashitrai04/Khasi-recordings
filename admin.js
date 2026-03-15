@@ -60,26 +60,40 @@
     el('goLeaderboard').addEventListener('click', () => { showView(leaderboardView); loadLeaderboard() });
     backFromUpload.addEventListener('click', () => { showView(dashView); loadStats() });
     backFromData.addEventListener('click', () => { showView(dashView); loadStats() });
-    el('backFromLeaderboard').addEventListener('click', () => { showView(dashView); loadStats() });
+    /* ── Leaderboard + Activity Log ── */
+    let lbInterval = null;
 
-    /* ── Leaderboard ── */
+    el('backFromLeaderboard').addEventListener('click', () => { clearInterval(lbInterval); lbInterval = null; showView(dashView); loadStats() });
+
     async function loadLeaderboard() {
         const wrap = el('leaderboardTableWrap');
+        const logWrap = el('activityLogWrap');
         const summary = el('lbSummary');
-        wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">Loading…</p>';
+        const refreshStatus = el('lbRefreshStatus');
         try {
             const r = await fetch('/api/leaderboard');
             const d = await r.json(); if (!r.ok) throw new Error(d.error);
             summary.textContent = d.total_speakers + ' contributors · ' + d.total_recordings.toLocaleString() + ' total recordings';
             renderLeaderboard(d.leaderboard, wrap);
-        } catch (e) { wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>' }
+            renderActivityLog(d.recent || [], logWrap);
+            refreshStatus.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        } catch (e) {
+            wrap.innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">' + e.message + '</p>';
+        }
+        // Auto-refresh every 15 seconds
+        if (!lbInterval) {
+            lbInterval = setInterval(() => {
+                if (!leaderboardView.classList.contains('hidden')) loadLeaderboard();
+                else { clearInterval(lbInterval); lbInterval = null; }
+            }, 15000);
+        }
     }
 
     function renderLeaderboard(list, wrap) {
         if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings yet</p>'; return }
         const medals = ['🥇', '🥈', '🥉'];
         let h = '<table class="data-table"><thead><tr>';
-        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:120px">Recordings</th>';
+        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:100px">Recordings</th>';
         h += '</tr></thead><tbody>';
         list.forEach((s, i) => {
             const rank = i < 3 ? medals[i] + ' ' + (i + 1) : (i + 1);
@@ -88,6 +102,39 @@
         });
         h += '</tbody></table>';
         wrap.innerHTML = h;
+    }
+
+    function renderActivityLog(logs, wrap) {
+        if (!logs.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">No recent activity</p>'; return }
+        let h = '';
+        logs.forEach(log => {
+            const ago = timeAgo(log.recorded_at);
+            const dur = log.duration ? log.duration.toFixed(1) + 's' : '';
+            const khasi = log.khasi ? (log.khasi.length > 50 ? log.khasi.slice(0, 50) + '…' : log.khasi) : '';
+            h += `<div style="padding:10px 12px;border-bottom:1px solid var(--border);transition:background .2s" onmouseenter="this.style.background='rgba(139,92,246,0.06)'" onmouseleave="this.style.background='transparent'">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-weight:600;font-size:.88rem">👤 ${esc(log.speaker)}</span>
+                    <span style="color:var(--muted);font-size:.72rem">${ago}</span>
+                </div>
+                <div style="font-size:.78rem;color:var(--muted);margin-bottom:2px">${esc(khasi)}</div>
+                <div style="display:flex;gap:12px;font-size:.72rem;color:var(--muted)">
+                    ${dur ? '<span>⏱ ' + dur + '</span>' : ''}
+                    ${log.gender ? '<span>👤 ' + esc(log.gender) + '</span>' : ''}
+                    ${log.location ? '<span>📍 ' + esc(log.location) + '</span>' : ''}
+                    <span>#${log.sentence_id}</span>
+                </div>
+            </div>`;
+        });
+        wrap.innerHTML = h;
+    }
+
+    function timeAgo(dateStr) {
+        if (!dateStr) return '';
+        const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+        if (diff < 60) return Math.floor(diff) + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
     }
 
     /* ── Filters ── */
