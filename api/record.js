@@ -21,6 +21,37 @@ module.exports = async (req, res) => {
                 continue;
             }
 
+            // ── Delete any existing recording(s) for this sentence+speaker ──
+            const { data: existing } = await supabase
+                .from('recordings')
+                .select('id, audio_path')
+                .eq('sentence_id', Number(sentence_id))
+                .eq('speaker_id', speaker_id);
+
+            if (existing && existing.length > 0) {
+                // Delete old audio files from storage
+                const filesToRemove = existing
+                    .map(r => {
+                        if (!r.audio_path) return null;
+                        // Extract filename from full URL
+                        const parts = r.audio_path.split('/');
+                        return parts[parts.length - 1];
+                    })
+                    .filter(Boolean);
+
+                if (filesToRemove.length > 0) {
+                    await supabase.storage.from('recordings').remove(filesToRemove);
+                }
+
+                // Delete old DB rows
+                await supabase
+                    .from('recordings')
+                    .delete()
+                    .eq('sentence_id', Number(sentence_id))
+                    .eq('speaker_id', speaker_id);
+            }
+
+            // ── Upload new audio file ──
             const buffer = Buffer.from(audio, 'base64');
             const safe = String(speaker_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 40);
             const fileName = `${sentence_id}_${safe}_${Date.now()}.wav`;
@@ -32,13 +63,13 @@ module.exports = async (req, res) => {
             const { data: urlData } = supabase.storage.from('recordings').getPublicUrl(fileName);
             const audioUrl = urlData?.publicUrl || fileName;
 
+            // ── Insert new recording ──
             const insertObj = {
                 sentence_id: Number(sentence_id),
                 speaker_id,
                 audio_path: audioUrl,
                 duration_seconds: parseFloat(duration_seconds) || null
             };
-            // Add gender/age/location if provided
             if (speaker_gender) insertObj.speaker_gender = speaker_gender;
             if (speaker_age) insertObj.speaker_age = parseInt(speaker_age) || null;
             if (speaker_location) insertObj.speaker_location = speaker_location;
@@ -46,7 +77,6 @@ module.exports = async (req, res) => {
             const { error: dbErr } = await supabase.from('recordings').insert(insertObj);
             if (dbErr) {
                 console.error('DB insert error:', dbErr.message);
-                // If column doesn't exist yet, try without gender/age
                 if (dbErr.message.includes('speaker_gender') || dbErr.message.includes('speaker_age')) {
                     const fallback = {
                         sentence_id: Number(sentence_id),
