@@ -5,7 +5,7 @@
     const loginView = el('loginView'), dashView = el('dashView'), uploadView = el('uploadView'), dataView = el('dataView'), leaderboardView = el('leaderboardView'), activityView = el('activityView');
     const loginUser = el('loginUser'), loginPass = el('loginPass'), loginBtn = el('loginBtn'), loginStatus = el('loginStatus');
     const adminName = el('adminName'), logoutBtn = el('logoutBtn');
-    const statSentences = el('statSentences'), statRecordings = el('statRecordings'), statSpeakers = el('statSpeakers');
+    const statSentences = el('statSentences'), statRecordings = el('statRecordings'), statSpeakers = el('statSpeakers'), statTotalTime = el('statTotalTime');
     const goUpload = el('goUpload'), goData = el('goData');
     const shareLink = el('shareLink'), copyLinkBtn = el('copyLinkBtn');
     const dropZone = el('dropZone'), fileInput = el('fileInput'), uploadProgress = el('uploadProgress'), uploadLabel = el('uploadLabel'), uploadFill = el('uploadFill'), uploadStatus = el('uploadStatus');
@@ -52,6 +52,7 @@
             statSentences.textContent = Number(d.sentences || 0).toLocaleString();
             statRecordings.textContent = Number(d.recordings || 0).toLocaleString();
             statSpeakers.textContent = Number(d.speakers || 0).toLocaleString();
+            statTotalTime.textContent = Number(d.total_seconds || 0).toLocaleString();
         } catch (e) { console.error(e) }
         shareLink.textContent = location.origin + '/record';
     }
@@ -94,12 +95,12 @@
         if (!list.length) { wrap.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px">No recordings for this period</p>'; return }
         const medals = ['🥇', '🥈', '🥉'];
         let h = '<table class="data-table"><thead><tr>';
-        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:100px">Recordings</th>';
+        h += '<th style="width:60px">Rank</th><th>Contributor</th><th>Gender</th><th>Location</th><th style="width:120px">Recordings</th>';
         h += '</tr></thead><tbody>';
         list.forEach((s, i) => {
             const rank = i < 3 ? medals[i] + ' ' + (i + 1) : (i + 1);
             const rowStyle = i < 3 ? ' style="background:rgba(139,92,246,0.08)"' : '';
-            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:600">${esc(s.name)}</td><td>${esc(s.gender) || '—'}</td><td>${esc(s.location) || '—'}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count}</span></td></tr>`;
+            h += `<tr${rowStyle}><td style="font-weight:700;font-size:1.05rem">${rank}</td><td style="font-weight:600">${esc(s.name)}</td><td>${esc(s.gender) || '—'}</td><td>${esc(s.location) || '—'}</td><td><span style="font-weight:700;color:var(--accent);font-size:1.1rem">${s.count.toLocaleString()}</span></td></tr>`;
         });
         h += '</tbody></table>';
         wrap.innerHTML = h;
@@ -154,7 +155,8 @@
 
     function timeAgo(dateStr) {
         if (!dateStr) return '';
-        const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+        let diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+        if (diff < 0) diff = 86400; // future timestamps → show as ~1 day ago
         if (diff < 60) return Math.floor(diff) + 's ago';
         if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
         if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
@@ -257,8 +259,8 @@
             h += `<tr data-id="${r.id}">
       <td><input type="checkbox" class="row-check" value="${r.id}" onchange="toggleRowCheck(${r.id},this.checked)" ${selectedIds.has(r.id) ? 'checked' : ''} /></td>
       <td>${r.id}</td>
-      <td class="wrap editable" data-field="english_text" data-table="sentences">${esc(r.english_text)}</td>
-      <td class="wrap editable" data-field="khasi_text" data-table="sentences">${esc(r.khasi_text)}</td>
+      <td class="wrap editable" data-field="english_text" data-table="final_sentences">${esc(r.english_text)}</td>
+      <td class="wrap editable" data-field="khasi_text" data-table="final_sentences">${esc(r.khasi_text)}</td>
       <td style="font-weight:600">${speakerName}</td>
       <td>${speakerGender}</td>
       <td>${speakerAge}</td>
@@ -408,7 +410,7 @@
                     const updates = {};
                     cells.forEach(c => { const inp = c.querySelector('.edit-input'); if (inp) { updates[c.dataset.field] = inp.value; c.textContent = inp.value } });
                     this.textContent = '✏️'; this.dataset.editing = 'false';
-                    saveEdit(id, updates, cells[0]?.dataset.table || 'sentences');
+                    saveEdit(id, updates, cells[0]?.dataset.table || 'final_sentences');
                 } else {
                     cells.forEach(c => { const v = c.textContent; c.innerHTML = `<input class="edit-input" value="${escAttr(v)}">` });
                     this.textContent = '💾'; this.dataset.editing = 'true';

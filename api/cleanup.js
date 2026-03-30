@@ -1,66 +1,71 @@
 const supabase = require('../lib/supabase');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
     try {
-        console.log('Fetching all recordings...');
-        let allRecordings = [];
-        let from = 0;
-        const PAGE = 1000;
+        // Read all valid IDs from the normalized CSV
+        const csvPath = path.join(__dirname, '..', 'final_recordings.csv');
+        const csvContent = fs.readFileSync(csvPath, 'utf-8');
+        const lines = csvContent.split('\n').filter(l => l.trim());
+        const csvIds = new Set();
+        for (let i = 1; i < lines.length; i++) {
+            const id = parseInt(lines[i].split(',')[0]);
+            if (!isNaN(id)) csvIds.add(id);
+        }
+
+        console.log(`CSV has ${csvIds.size} valid IDs`);
+
+        // Fetch ALL recording IDs from database (paginate)
+        const allDbIds = [];
+        let offset = 0;
+        const pageSize = 1000;
         while (true) {
             const { data, error } = await supabase
-                .from('recordings')
-                .select('id, sentence_id, speaker_id, created_at, audio_path')
-                .range(from, from + PAGE - 1)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                return res.status(500).json({ error: error.message });
-            }
+                .from('final_recordings')
+                .select('id')
+                .range(offset, offset + pageSize - 1);
+            if (error) throw error;
             if (!data || data.length === 0) break;
-            allRecordings = allRecordings.concat(data);
-            if (data.length < PAGE) break;
-            from += PAGE;
+            data.forEach(r => allDbIds.push(r.id));
+            if (data.length < pageSize) break;
+            offset += pageSize;
         }
 
-        const groups = {};
-        for (const rec of allRecordings) {
-            const key = `${rec.sentence_id}_${rec.speaker_id}`;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(rec);
+        console.log(`Database has ${allDbIds.length} recordings`);
+
+        // Find IDs in database that are NOT in CSV
+        const orphanIds = allDbIds.filter(id => !csvIds.has(id));
+        console.log(`Found ${orphanIds.length} orphan records to delete`);
+
+        if (orphanIds.length === 0) {
+            return res.json({ message: 'Database already matches CSV', db_count: allDbIds.length, csv_count: csvIds.size });
         }
 
-        let toDeleteDbIds = [];
-        let toDeleteStoragePaths = [];
-
-        for (const key in groups) {
-            const group = groups[key];
-            if (group.length > 1) {
-                // Keep the newest (first one since sorted DESC)
-                const removeList = group.slice(1);
-                for (const r of removeList) {
-                    toDeleteDbIds.push(r.id);
-                    if (r.audio_path) {
-                        const parts = r.audio_path.split('/');
-                        const filename = parts[parts.length - 1];
-                        toDeleteStoragePaths.push(filename);
-                    }
-                }
-            }
+        // Delete orphan records in batches
+        const BATCH = 500;
+        let deleted = 0;
+        for (let i = 0; i < orphanIds.length; i += BATCH) {
+            const batch = orphanIds.slice(i, i + BATCH);
+            const { error: delErr } = await supabase
+                .from('final_recordings')
+                .delete()
+                .in('id', batch);
+            if (delErr) throw delErr;
+            deleted += batch.length;
         }
 
-        if (toDeleteDbIds.length > 0) {
-            for (let i = 0; i < toDeleteDbIds.length; i += 100) {
-                const chunk = toDeleteDbIds.slice(i, i + 100);
-                await supabase.from('recordings').delete().in('id', chunk);
-            }
-            for (let i = 0; i < toDeleteStoragePaths.length; i += 50) {
-                const chunk = toDeleteStoragePaths.slice(i, i + 50);
-                await supabase.storage.from('recordings').remove(chunk);
-            }
-        }
-
-        res.json({ success: true, deleted: toDeleteDbIds.length });
+        res.json({
+            message: `Cleaned up ${deleted} orphan records`,
+            before: allDbIds.length,
+            after: allDbIds.length - deleted,
+            csv_count: csvIds.size
+        });
     } catch (err) {
+        console.error('Cleanup error:', err);
         res.status(500).json({ error: err.message });
     }
 };

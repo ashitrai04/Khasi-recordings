@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
         let inserted = 0;
         for (let i = 0; i < toInsert.length; i += BATCH) {
             const chunk = toInsert.slice(i, i + BATCH);
-            const { error } = await supabase.from('sentences').insert(chunk);
+            const { error } = await supabase.from('final_sentences').insert(chunk);
             if (error) throw error;
             inserted += chunk.length;
         }

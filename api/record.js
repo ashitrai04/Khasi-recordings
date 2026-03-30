@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
 
             // ── Delete any existing recording(s) for this sentence+speaker ──
             const { data: existing } = await supabase
-                .from('recordings')
+                .from('final_recordings')
                 .select('id, audio_path')
                 .eq('sentence_id', Number(sentence_id))
                 .eq('speaker_id', speaker_id);
@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
 
                 // Delete old DB rows
                 await supabase
-                    .from('recordings')
+                    .from('final_recordings')
                     .delete()
                     .eq('sentence_id', Number(sentence_id))
                     .eq('speaker_id', speaker_id);
@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
             if (speaker_age) insertObj.speaker_age = parseInt(speaker_age) || null;
             if (speaker_location) insertObj.speaker_location = speaker_location;
 
-            const { error: dbErr } = await supabase.from('recordings').insert(insertObj);
+            const { error: dbErr } = await supabase.from('final_recordings').insert(insertObj);
             if (dbErr) {
                 console.error('DB insert error:', dbErr.message);
                 if (dbErr.message.includes('speaker_gender') || dbErr.message.includes('speaker_age')) {
@@ -84,14 +84,14 @@ module.exports = async (req, res) => {
                         audio_path: audioUrl,
                         duration_seconds: parseFloat(duration_seconds) || null
                     };
-                    const { error: fbErr } = await supabase.from('recordings').insert(fallback);
+                    const { error: fbErr } = await supabase.from('final_recordings').insert(fallback);
                     if (fbErr) { results.push({ sentence_id, ok: false, error: fbErr.message }); continue; }
                 } else {
                     results.push({ sentence_id, ok: false, error: dbErr.message }); continue;
                 }
             }
 
-            await supabase.from('sentences').update({ has_recording: true }).eq('id', Number(sentence_id));
+            await supabase.from('final_sentences').update({ has_recording: true }).eq('id', Number(sentence_id));
             results.push({ sentence_id, ok: true, audio_path: audioUrl });
         }
 

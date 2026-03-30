@@ -8,7 +8,7 @@ async function cleanDuplicates() {
     const PAGE = 1000;
     while (true) {
         const { data, error } = await supabase
-            .from('recordings')
+            .from('final_recordings')
             .select('id, sentence_id, speaker_id, created_at, audio_path')
             .range(from, from + PAGE - 1)
             .order('created_at', { ascending: false });
@@ -61,7 +61,7 @@ async function cleanDuplicates() {
         for (let i = 0; i < toDeleteDbIds.length; i += 50) {
             const chunk = toDeleteDbIds.slice(i, i + 50);
             const { error } = await supabase
-                .from('recordings')
+                .from('final_recordings')
                 .delete()
                 .in('id', chunk);
             if (error) {

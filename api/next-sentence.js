@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
 
         // Get total count of unrecorded sentences
         const { count: totalCount, error: countErr } = await supabase
-            .from('sentences')
+            .from('final_sentences')
             .select('*', { count: 'exact', head: true })
             .or('has_recording.eq.false,has_recording.is.null');
 
@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
         const randomOff = Math.floor(Math.random() * (maxOffset + 1));
 
         const { data, error } = await supabase
-            .from('sentences')
+            .from('final_sentences')
             .select('*')
             .or('has_recording.eq.false,has_recording.is.null')
             .order('id')

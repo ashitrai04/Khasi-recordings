@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
         let offset = 0, hasMore = true;
         while (hasMore) {
             const { data, error } = await supabase
-                .from('sentences')
+                .from('final_sentences')
                 .select('id, english_text, khasi_text')
                 .order('id').range(offset, offset + PAGE - 1);
             if (error) throw error;
@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
             for (const s of data) {
                 // Fetch recordings for this sentence
                 const { data: recs } = await supabase
-                    .from('recordings')
+                    .from('final_recordings')
                     .select('speaker_id, audio_path, duration_seconds, created_at, speaker_gender, speaker_age, speaker_location')
                     .eq('sentence_id', s.id)
                     .order('created_at', { ascending: false });

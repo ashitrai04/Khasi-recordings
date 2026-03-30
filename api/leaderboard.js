@@ -33,8 +33,8 @@ module.exports = async (req, res) => {
         const PAGE = 1000;
         while (true) {
             let query = supabase
-                .from('recordings')
-                .select('speaker_id, speaker_gender, speaker_location, created_at')
+                .from('final_recordings')
+                .select('speaker_id, speaker_gender, speaker_location, duration_seconds, created_at')
                 .range(from, from + PAGE - 1);
 
             if (dateFilter) {
@@ -52,7 +52,7 @@ module.exports = async (req, res) => {
             from += PAGE;
         }
 
-        // Group by speaker and count
+        // Group by speaker — accumulate count and total time
         const speakerMap = {};
         allRecordings.forEach(r => {
             const name = r.speaker_id || 'Unknown';
@@ -60,20 +60,23 @@ module.exports = async (req, res) => {
                 speakerMap[name] = {
                     name,
                     count: 0,
+                    total_time: 0,
                     gender: r.speaker_gender || '',
                     location: r.speaker_location || ''
                 };
             }
             speakerMap[name].count++;
+            speakerMap[name].total_time += (r.duration_seconds || 0);
         });
 
-        // Sort descending by count
+        // Round total_time and sort descending by total_time
         const leaderboard = Object.values(speakerMap)
+            .map(s => ({ ...s, total_time: Math.round(s.total_time * 10) / 10 }))
             .sort((a, b) => b.count - a.count);
 
         // Fetch recent recordings for activity log (last 30, always unfiltered)
         const { data: recentData, error: recentErr } = await supabase
-            .from('recordings')
+            .from('final_recordings')
             .select('sentence_id, speaker_id, speaker_gender, speaker_location, duration_seconds, created_at')
             .order('created_at', { ascending: false })
             .limit(30);
@@ -84,7 +87,7 @@ module.exports = async (req, res) => {
         if (recentData && recentData.length > 0) {
             const sentIds = [...new Set(recentData.map(r => r.sentence_id))];
             const { data: sentData } = await supabase
-                .from('sentences')
+                .from('final_sentences')
                 .select('id, english_text, khasi_text')
                 .in('id', sentIds);
             const sentMap = {};
